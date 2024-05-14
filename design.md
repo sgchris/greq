@@ -21,7 +21,7 @@ Options:
 
 ## Greq file spec
 
-Greq file consist of 3 parts separated by 4 dash ("-") characters. The first part is the request metadata, the second part is the HTTP request,
+Greq file consist of 3 parts separated by 4 equal ("=") characters (at least 4, can be more). The first part is the request metadata, the second part is the HTTP request,
 and the third part is the assertions and callbacks part. 
 Example:
 
@@ -30,13 +30,13 @@ project: my-project
 output-folder: ../my-output-folder
 -- comments start with two dash characters
 output-file-name: "my-request-1-output"
-----
+====
 POST /some-url/example
 content-type: application/json
 my-custom-header: my-value
 
 {"my":"json", "content":"example"}
-----
+====
 has-status-code: 200
 or-has-status-code: 201
 not-has-status-code: 500
@@ -55,9 +55,9 @@ ends-with, case-sensitive: "the end."
 Another example containing base request
 ```
 base-request: my-base-request.greq
-----
+====
 -- everything in the second section overrides the properties in the base request
 POST /another-url/example
-----
+====
 ```
 
