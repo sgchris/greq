@@ -19,6 +19,9 @@ Options:
     --output-dir, -o    Store the responses in a specified destination folder
                         Example: --output-dir "c:\temp\my-responses"
 
+    --log-file, -l      Full path to the log file. By default the log is stored in a temporary
+                        folder (e.g. C:\Temp) and called greq.log
+
 ## Greq file spec
 
 Greq file consist of 3 parts separated by 4 equal ("=") characters (at least 4, can be more). The first part is the request metadata, the second part is the HTTP request,
@@ -30,6 +33,7 @@ project: my-project
 output-folder: ../my-output-folder
 -- comments start with two dash characters
 output-file-name: "my-request-1-output"
+certificate: c:\certs\my-cert.pfx
 ====
 POST /some-url/example
 content-type: application/json
