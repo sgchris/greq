@@ -1,9 +1,14 @@
-use std::collections::HashMap;
+#![allow(dead_code, unused_variables)]
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct GreqHeader {
     original_string: String,
-    headers: HashMap<String, String>,
+
+    // project_name: String, // the name of the project. Will be implemented.
+    output_folder: String,    // path to a destination folder. Default current.
+    output_file_name: String, // output filename. default current file name with ".response" extension.
+
+    pfx_certificate: String, // Absolute path to the certificate file (pfx)
 }
 
 impl GreqHeader {
@@ -11,19 +16,32 @@ impl GreqHeader {
         if !GreqHeader::is_valid(contents) {
             return Err("The provided contents for the header are not valid");
         }
-        let mut parsed_headers: HashMap<String, String> = HashMap::new();
+
+        // initialize the object
+        let mut greq_header = GreqHeader::default();
+        greq_header.original_string = contents.to_string();
+
+        // parse lines and assign properties
         contents.split("\r\n").for_each(|line| {
             let line_parts: Vec<&str> = line.split(":").collect();
-            parsed_headers.insert(
-                line_parts[0].trim().to_string(),
-                line_parts[1].trim().to_string(),
-            );
+            let header_name: &str = line_parts[0].trim();
+            let header_value = line_parts[1].trim().to_lowercase().to_string();
+
+            match header_name.to_lowercase().as_str() {
+                "output-folder" => {
+                    greq_header.output_folder = header_value;
+                }
+                "output-file-name" => {
+                    greq_header.output_file_name = header_value;
+                }
+                "pfx-certificate" => {
+                    greq_header.pfx_certificate = header_value;
+                }
+                _ => {}
+            };
         });
 
-        Ok(GreqHeader {
-            original_string: contents.to_string(),
-            headers: parsed_headers,
-        })
+        Ok(greq_header)
     }
 
     pub fn is_valid(contents: &str) -> bool {
@@ -45,7 +63,7 @@ impl GreqHeader {
 
             // must have at most one ":"
             if line.matches(":").count() > 1 {
-                // check that every occurance after the first one, has a "\" prefix
+                // TODO: check that every occurance after the first one, has a "\" prefix
             }
 
             return false;
@@ -62,16 +80,16 @@ mod tests {
     #[test]
     fn from_string_test_success() {
         // arrange
-        let test_content = "x: 1\r\ny:2";
+        let test_content =
+            "output-folder: /some/folder\r\npfx-certificate: c:\\some\\folder\\cert.pfx";
 
         // act
         let result: GreqHeader = GreqHeader::from_string(test_content)
             .expect("Could not parse the test contents string");
         println!("greq_header: {:?}", result);
 
-        assert_eq!(result.headers.len(), 2);
-        assert!(result.headers.contains_key("x"));
-        assert!(result.headers.contains_key("y"));
-        assert_eq!(result.headers.get("x").unwrap(), "1");
+        assert_eq!(result.original_string, test_content);
+        assert_eq!(result.output_folder, "/some/folder");
+        assert_eq!(result.pfx_certificate, "c:\\some\\folder\\cert.pfx");
     }
 }
