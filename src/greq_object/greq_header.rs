@@ -25,7 +25,7 @@ impl GreqHeader {
         contents.split("\r\n").for_each(|line| {
             let line_parts: Vec<&str> = line.split(":").collect();
             let header_name: &str = line_parts[0].trim();
-            let header_value = line_parts[1].trim().to_lowercase().to_string();
+            let header_value = line_parts[1..].join(":").trim().to_lowercase().to_string();
 
             match header_name.to_lowercase().as_str() {
                 "output-folder" => {
@@ -38,7 +38,7 @@ impl GreqHeader {
                     greq_header.pfx_certificate = header_value;
                 }
                 _ => {}
-            };
+            }
         });
 
         Ok(greq_header)
@@ -47,29 +47,24 @@ impl GreqHeader {
     pub fn is_valid(contents: &str) -> bool {
         // empty contents allowed
         if contents.trim().len() == 0 {
+            println!("empty contents of the header");
             return true;
         }
 
         let has_errors: bool = contents.split("\r\n").any(|line| {
-            // must not me empty
-            if line.len() == 0 {
-                return true;
+            // must not be empty
+            if line.is_empty() {
+                println!("empty line in the header");
+                true
+            } else if !line.contains(":") {
+                println!("the line in the header does not contain ':' character");
+                true
+            } else {
+                false
             }
-
-            // must have ":"
-            if !line.contains(":") {
-                return true;
-            }
-
-            // must have at most one ":"
-            if line.matches(":").count() > 1 {
-                // TODO: check that every occurance after the first one, has a "\" prefix
-            }
-
-            return false;
         });
 
-        has_errors
+        !has_errors
     }
 }
 
