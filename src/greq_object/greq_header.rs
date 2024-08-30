@@ -8,8 +8,12 @@ struct GreqHeader {
     output_folder: String,    // path to a destination folder. Default current.
     output_file_name: String, // output filename. default current file name with ".response" extension.
 
+    // absolute path to the certificate (PFX)
     certificate: String, // Absolute path to the certificate file (pfx) certificate password will be handled later
+    // the request that this file extends
     base_request: String,
+    // execute that request before executing this one
+    depends_on: String,
 }
 
 impl GreqHeader {
@@ -25,7 +29,7 @@ impl GreqHeader {
 
         let mut unknown_headers: Vec<&str> = vec![];
         // parse lines and assign properties
-        contents.split("\r\n").for_each(|line| {
+        contents.lines().for_each(|line| {
             let line_parts: Vec<&str> = line.split(":").collect();
             let header_name: &str = line_parts[0].trim();
             let header_value = line_parts[1..].join(":").trim().to_lowercase().to_string();
@@ -68,7 +72,7 @@ impl GreqHeader {
         }
 
         let mut errors: Vec<&str> = vec![];
-        contents.split("\r\n").for_each(|line| {
+        contents.lines().for_each(|line| {
             // must not be empty
             if line.is_empty() {
                 errors.push("empty line in the header");
@@ -78,10 +82,10 @@ impl GreqHeader {
             }
         });
 
-        return match errors.is_empty() {
+        match errors.is_empty() {
             true => Ok(true),
             false => Err(errors.join(", ")),
-        };
+        }
     }
 }
 

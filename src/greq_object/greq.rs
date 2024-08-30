@@ -1,4 +1,4 @@
 #[derive(Debug)]
-struct GreqObject {
+struct Greq {
     file_contents: String,
 }

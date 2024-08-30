@@ -75,6 +75,7 @@ response ends-with case-sensitive: "the end."
 4. *certificate* - Absolute path to the certificate
 5. *base-request* - reference to GReq file to be used as a base/reference file. The current file with use the header, contents and the footer
 from the base file. Everything defined in this file will extend/override the values provided in the base GReq file.
+6. *depends-on* - Execute another GReq file before executing this one. (For example, if this request performs delete or update request, you need to create the resource first. You can do that in another GReq file and mention it here)
 
 #### Content
 
