@@ -94,10 +94,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_string_test_success() {
+    fn header_from_string_test_success() {
         // arrange
-        let test_content =
-            "output-folder: /some/folder\r\npfx-certificate: c:\\some\\folder\\cert.pfx";
+        let test_content = "output-folder: /some/folder\r\ncertificate: c:\\some\\folder\\cert.pfx";
 
         // act
         let result: GreqHeader = GreqHeader::from_string(test_content)

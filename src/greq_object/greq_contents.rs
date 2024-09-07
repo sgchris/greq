@@ -37,24 +37,45 @@ impl GreqContents {
         };
 
         // Parse headers
+        let mut content_lines: Vec<&str> = vec![];
+        let mut is_content_line = false;
         for line in lines.by_ref() {
-            if line.trim().is_empty() {
-                break; // Empty line signifies the end of headers
+            if line.trim().is_empty() && !is_content_line {
+                is_content_line = true;
+                continue; // Empty line signifies the end of headers
             }
-            if let Some((key, value)) = line.split_once(':') {
+
+            if is_content_line {
+                content_lines.push(line)
+            } else if let Some((key, value)) = line.split_once(':') {
                 http_request
                     .headers
                     .insert(key.trim().to_string(), value.trim().to_string());
+            } else {
+                return Err(format!("Invalid header line: {}", line));
             }
         }
 
         // The rest is the content/body
-        let content = lines.collect::<Vec<&str>>().join("\r\n");
-        http_request.content = content;
+        //let content = lines.collect::<Vec<&str>>().join("\r\n");
+        http_request.content = content_lines.join("\r\n");
 
         Ok(GreqContents {
             original_string: contents.to_string(),
             http_request,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contents_from_string_test_success() {
+        let contents = "";
+
+        let greq_contents = GreqContents::from_string(contents);
+        assert!(matches!(greq_contents, Err(_e)));
     }
 }
