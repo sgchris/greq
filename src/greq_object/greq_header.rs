@@ -58,7 +58,7 @@ impl GreqHeader {
 
         if !unknown_headers.is_empty() {
             // Return an error with the formatted message
-            return Err(format!("Unknown headers: {}", unknown_headers.join(", ")));
+            return Err(format!("unknown headers: {}", unknown_headers.join(", ")));
         }
 
         Ok(greq_header)
@@ -71,21 +71,15 @@ impl GreqHeader {
             return Ok(true);
         }
 
-        let mut errors: Vec<&str> = vec![];
-        contents.lines().for_each(|line| {
-            // must not be empty
-            if line.is_empty() {
-                errors.push("empty line in the header");
-            }
-            if !line.contains(":") {
-                errors.push("the line in the header does not contain ':' character");
-            }
-        });
-
-        match errors.is_empty() {
-            true => Ok(true),
-            false => Err(errors.join(", ")),
+        if contents.lines().find(|line| line.trim().is_empty()).is_some() {
+            return Err("empty line in the header".to_string());
         }
+
+        if contents.lines().find(|line| !line.trim().contains(":")).is_some() {
+            return Err("line without ':' character".to_string());
+        }
+
+        Ok(true)
     }
 }
 
@@ -94,17 +88,96 @@ mod tests {
     use super::*;
 
     #[test]
-    fn header_from_string_test_success() {
-        // arrange
-        let test_content = "output-folder: /some/folder\r\ncertificate: c:\\some\\folder\\cert.pfx";
+    fn test_valid_input() {
+        let input = "project: MyProject\n\
+                     base-request: GET /api/data\n\
+                     output-folder: /tmp\n\
+                     output-file-name: response.json\n\
+                     certificate: /path/to/certificate.pfx";
+        let result = GreqHeader::from_string(input);
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.project, "myproject");
+        assert_eq!(header.base_request, "get /api/data");
+        assert_eq!(header.output_folder, "/tmp");
+        assert_eq!(header.output_file_name, "response.json");
+        assert_eq!(header.certificate, "/path/to/certificate.pfx");
+    }
 
-        // act
-        let result: GreqHeader = GreqHeader::from_string(test_content)
-            .expect("Could not parse the test contents string");
-        println!("greq_header: {:?}", result);
+    #[test]
+    fn test_empty_input() {
+        let input = "";
+        let result = GreqHeader::from_string(input);
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.original_string, "");
+    }
 
-        assert_eq!(result.original_string, test_content);
-        assert_eq!(result.output_folder, "/some/folder");
-        assert_eq!(result.certificate, "c:\\some\\folder\\cert.pfx");
+    #[test]
+    fn test_invalid_format_missing_colon() {
+        let input = "project MyProject\n\
+                     base-request: GET /api/data";
+        let result = GreqHeader::from_string(input);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "line without ':' character");
+    }
+
+    #[test]
+    fn test_invalid_format_empty_line() {
+        let input = "project: MyProject\n\
+                     \n\
+                     base-request: GET /api/data";
+        let result = GreqHeader::from_string(input);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "empty line in the header");
+    }
+
+    #[test]
+    fn test_unknown_headers() {
+        let input = "project: MyProject\n\
+                     unknown-header: some value\n\
+                     base-request: GET /api/data";
+        let result = GreqHeader::from_string(input);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown headers: unknown-header"));
+    }
+
+    #[test]
+    fn test_multiple_headers() {
+        let input = "project: MyProject\n\
+                     output-folder: /tmp\n\
+                     output-folder: /var/tmp\n\
+                     base-request: GET /api/data\n\
+                     certificate: /path/to/certificate.pfx";
+        let result = GreqHeader::from_string(input);
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.output_folder, "/var/tmp"); // Last occurrence should overwrite previous
+    }
+
+    #[test]
+    fn test_is_valid_empty() {
+        let result = GreqHeader::is_valid("");
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_is_valid_with_empty_lines() {
+        let input = "project: MyProject\n\
+                     \n\
+                     base-request: GET /api/data";
+        let result = GreqHeader::is_valid(input);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("empty line in the header"));
+    }
+
+    #[test]
+    fn test_is_valid_no_colon() {
+        let input = "project MyProject\n\
+                     base-request: GET /api/data";
+        let result = GreqHeader::is_valid(input);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("line without ':' character"));
     }
 }

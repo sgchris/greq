@@ -3,7 +3,5 @@ name = "greq"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-rustflags = ["-A", "dead_code", "-A", "unused"]
-
 [dependencies]
+regex = "1.10.6"
