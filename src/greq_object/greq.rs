@@ -1,4 +1,4 @@
 #[derive(Debug)]
-struct Greq {
+pub struct Greq {
     file_contents: String,
 }

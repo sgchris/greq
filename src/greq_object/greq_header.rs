@@ -1,7 +1,5 @@
-#![allow(dead_code, unused_variables)]
-
 #[derive(Debug, Default)]
-struct GreqHeader {
+pub struct GreqHeader {
     original_string: String,
 
     project: String,          // the name of the project. Will be implemented.

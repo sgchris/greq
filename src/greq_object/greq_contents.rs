@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use regex::Regex;
 
 #[derive(Debug)]
-struct GreqContents {
+pub struct GreqContents {
     original_string: String,
     http_request: GreqHttpRequest,
 }
