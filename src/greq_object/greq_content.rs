@@ -1,15 +1,16 @@
+use crate::greq_object::from_string_trait::FromString;
 use crate::greq_object::greq_http_request::GreqHttpRequest;
 use std::collections::HashMap;
 use regex::Regex;
 
-#[derive(Debug)]
-pub struct GreqContents {
-    original_string: String,
-    http_request: GreqHttpRequest,
+#[derive(Debug, Default)]
+pub struct GreqContent {
+    pub original_string: String,
+    pub http_request: GreqHttpRequest,
 }
 
-impl GreqContents {
-    pub fn from_string(contents: &str) -> Result<GreqContents, String> {
+impl FromString for GreqContent {
+    fn from_string(contents: &str) -> Result<GreqContent, String> {
         // empty contents are not allowed
         if contents.trim().is_empty() {
             return Err("empty contents".to_string());
@@ -24,12 +25,12 @@ impl GreqContents {
             .next()
             .ok_or("Missing HTTP method")?
             .to_string();
-        if !GreqContents::method_is_valid(&method) {
+        if !Self::method_is_valid(&method) {
             return Err("Missing HTTP method".to_string());
         }
 
         let uri = request_parts.next().ok_or("Missing URI")?.to_string();
-        if GreqContents::is_valid_http_version(&uri) {
+        if Self::is_valid_http_version(&uri) {
             return Err("Missing URI".to_string());
         }
 
@@ -70,13 +71,15 @@ impl GreqContents {
         //let content = lines.collect::<Vec<&str>>().join("\r\n");
         http_request.content = content_lines.join("\r\n");
 
-        Ok(GreqContents {
+        Ok(GreqContent {
             original_string: contents.to_string(),
             http_request,
         })
     }
+}
 
-    pub(super) fn method_is_valid(method: &str) -> bool {
+impl GreqContent {
+    fn method_is_valid(method: &str) -> bool {
         let valid_methods = [
             "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"
         ];
@@ -85,7 +88,7 @@ impl GreqContents {
         valid_methods.contains(&method)
     }
 
-    pub(super) fn is_valid_http_version(version: &str) -> bool {
+    fn is_valid_http_version(version: &str) -> bool {
         // Define the regex pattern for "HTTP/x.y" format
         let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
         re.is_match(version)
@@ -99,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_empty_contents() {
-        let result = GreqContents::from_string("");
+        let result = GreqContent::from_string("");
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "empty contents".to_string());
     }
@@ -107,7 +110,7 @@ mod tests {
     #[test]
     fn test_only_request_line() {
         let contents = "GET /index.html HTTP/1.1";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -120,7 +123,7 @@ mod tests {
     #[test]
     fn test_request_with_headers() {
         let contents = "GET /index.html HTTP/1.1\r\nHost: localhost\r\nUser-Agent: curl";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -134,7 +137,7 @@ mod tests {
     #[test]
     fn test_request_with_content() {
         let contents = "GET /index.html HTTP/1.1\r\n\r\nThis is the body content";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -147,7 +150,7 @@ mod tests {
     #[test]
     fn test_request_with_headers_and_content() {
         let contents = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\nThis is the body content";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -160,7 +163,7 @@ mod tests {
     #[test]
     fn test_request_with_headers_and_double_empty_line_before_content() {
         let contents = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n\r\nThis is the body content";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -175,7 +178,7 @@ mod tests {
     #[test]
     fn test_request_with_malformed_header() {
         let contents = "GET /index.html HTTP/1.1\r\nMalformedHeaderWithoutColon";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Invalid header line: MalformedHeaderWithoutColon".to_string());
     }
@@ -183,7 +186,7 @@ mod tests {
     #[test]
     fn test_missing_method() {
         let contents = "/index.html HTTP/1.1";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Missing HTTP method".to_string());
     }
@@ -191,7 +194,7 @@ mod tests {
     #[test]
     fn test_missing_uri() {
         let contents = "GET HTTP/1.1";
-        let result = GreqContents::from_string(contents);
+        let result = GreqContent::from_string(contents);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Missing URI".to_string());
     }
@@ -200,7 +203,7 @@ mod tests {
     fn test_http_version() {
         // Case 1: With HTTP version explicitly provided
         let contents_with_version = "GET /index.html HTTP/2.0\r\nHost: localhost";
-        let result_with_version = GreqContents::from_string(contents_with_version);
+        let result_with_version = GreqContent::from_string(contents_with_version);
         assert!(result_with_version.is_ok());
 
         let greq_with_version = result_with_version.unwrap();
@@ -210,7 +213,7 @@ mod tests {
 
         // Case 2: Without HTTP version (should default to HTTP/1.1)
         let contents_without_version = "GET /index.html\r\nHost: localhost";
-        let result_without_version = GreqContents::from_string(contents_without_version);
+        let result_without_version = GreqContent::from_string(contents_without_version);
         assert!(result_without_version.is_ok());
 
         let greq_without_version = result_without_version.unwrap();

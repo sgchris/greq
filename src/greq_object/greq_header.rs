@@ -1,21 +1,26 @@
+use crate::greq_object::from_string_trait::FromString;
+
 #[derive(Debug, Default)]
 pub struct GreqHeader {
-    original_string: String,
+    pub original_string: String,
 
-    project: String,          // the name of the project. Will be implemented.
-    output_folder: String,    // path to a destination folder. Default current.
-    output_file_name: String, // output filename. default current file name with ".response" extension.
+    pub project: String,          // the name of the project. Will be implemented.
+    pub output_folder: String,    // path to a destination folder. Default current.
+    pub output_file_name: String, // output filename. default current file name with ".response" extension.
 
     // absolute path to the certificate (PFX)
-    certificate: String, // Absolute path to the certificate file (pfx) certificate password will be handled later
+    pub certificate: String, // Absolute path to the certificate file (pfx) certificate password will be handled later
+    // http and not https request
+    pub is_http: bool,
+
     // the request that this file extends
-    base_request: String,
+    pub base_request: String,
     // execute that request before executing this one
-    depends_on: String,
+    pub depends_on: String,
 }
 
-impl GreqHeader {
-    pub fn from_string(contents: &str) -> Result<GreqHeader, String> {
+impl FromString for GreqHeader {
+    fn from_string(contents: &str) -> Result<GreqHeader, String> {
         // validate the contents
         GreqHeader::is_valid(contents)?;
 
@@ -48,6 +53,9 @@ impl GreqHeader {
                 "certificate" => {
                     greq_header.certificate = header_value;
                 }
+                "is-http" => {
+                    greq_header.is_http = true;
+                }
                 _ => {
                     unknown_headers.push(header_name);
                 }
@@ -61,7 +69,9 @@ impl GreqHeader {
 
         Ok(greq_header)
     }
+}
 
+impl GreqHeader {
     // should be public as it's used as static
     pub fn is_valid(contents: &str) -> Result<bool, String> {
         // empty contents allowed

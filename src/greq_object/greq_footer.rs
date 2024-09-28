@@ -1,3 +1,4 @@
+use crate::greq_object::from_string_trait::FromString;
 
 #[derive(Debug, PartialEq)]
 pub enum ConditionOperator {
@@ -26,12 +27,12 @@ pub struct GreqFooterCondition {
 /// The footer element containing all the test conditions
 #[derive(Debug, Default)]
 pub struct GreqFooter {
-    original_string: String,
+    pub original_string: String,
     pub conditions: Vec<GreqFooterCondition>,
 }
 
-impl GreqFooter {
-    pub fn from_string(contents: &str) -> Result<GreqFooter, String> {
+impl FromString for GreqFooter {
+    fn from_string(contents: &str) -> Result<GreqFooter, String> {
         let mut conditions = Vec::new();
         let original_string = contents.to_string();
 
@@ -55,7 +56,9 @@ impl GreqFooter {
             conditions,
         })
     }
+}
 
+impl GreqFooter {
     fn parse_condition(line: &str) -> Result<GreqFooterCondition, String> {
         // Split the line on the first ":" to separate key and value
         let (key_part, value_part) = line.split_once(":").unwrap_or_default();
