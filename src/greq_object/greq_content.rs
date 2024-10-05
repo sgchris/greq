@@ -1,7 +1,8 @@
-use crate::greq_object::from_string_trait::FromString;
 use crate::greq_object::greq_http_request::GreqHttpRequest;
+use crate::greq_object::traits::from_string_trait::FromString;
 use std::collections::HashMap;
 use regex::Regex;
+use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
 #[derive(Debug, Default)]
 pub struct GreqContent {
@@ -36,15 +37,13 @@ impl FromString for GreqContent {
 
         let http_version = request_parts.next().unwrap_or("HTTP/1.1").to_string();
 
-
         // Initialize the HTTP request
         let mut http_request = GreqHttpRequest {
             method,
             uri,
             http_version,
             headers: HashMap::new(),
-            content: String::default(),
-            hostname: String::default(),
+            ..Default::default()
         };
 
         // Parse headers
@@ -59,9 +58,20 @@ impl FromString for GreqContent {
             if is_content_line {
                 content_lines.push(line)
             } else if let Some((key, value)) = line.split_once(':') {
-                http_request
-                    .headers
-                    .insert(key.trim().to_string(), value.trim().to_string());
+                if key.to_lowercase() == "host" {
+                    let (hostname, port_string) = value.split_once(":").unwrap_or_default();
+                    if !hostname.is_empty() {
+                        http_request.hostname = hostname.to_string();
+                    }
+
+                    if !port_string.is_empty() {
+                        http_request.port = port_string.trim().parse::<u16>().unwrap_or_else(|_| 443);
+                    }
+                } else {
+                    http_request
+                        .headers
+                        .insert(key.trim().to_string(), value.trim().to_string());
+                }
             } else {
                 return Err(format!("Invalid header line: {}", line));
             }
@@ -75,6 +85,15 @@ impl FromString for GreqContent {
             original_string: contents.to_string(),
             http_request,
         })
+    }
+}
+
+impl EnrichWith for GreqContent {
+    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+    where
+        Self: Sized
+    {
+        Ok(())
     }
 }
 
@@ -156,7 +175,7 @@ mod tests {
         let greq = result.unwrap();
         assert_eq!(greq.http_request.method, "GET");
         assert_eq!(greq.http_request.uri, "/index.html");
-        assert_eq!(greq.http_request.headers.get("Host").unwrap(), "localhost");
+        assert_eq!(greq.http_request.headers.get("Host").unwrap_or(&"".to_string()), "");
         assert_eq!(greq.http_request.content, "This is the body content");
     }
 

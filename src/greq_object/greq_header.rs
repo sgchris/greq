@@ -1,4 +1,5 @@
-use crate::greq_object::from_string_trait::FromString;
+use crate::greq_object::traits::from_string_trait::FromString;
+use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
 #[derive(Debug, Default)]
 pub struct GreqHeader {
@@ -11,12 +12,12 @@ pub struct GreqHeader {
     // absolute path to the certificate (PFX)
     pub certificate: String, // Absolute path to the certificate file (pfx) certificate password will be handled later
     // http and not https request
-    pub is_http: bool,
+    pub is_http: Option<bool>,
 
     // the request that this file extends
-    pub base_request: String,
+    pub base_request: Option<String>,
     // execute that request before executing this one
-    pub depends_on: String,
+    pub depends_on: Option<String>,
 }
 
 impl FromString for GreqHeader {
@@ -41,8 +42,11 @@ impl FromString for GreqHeader {
                 "project" => {
                     greq_header.project = header_value;
                 }
+                "depends-on" => {
+                    greq_header.depends_on = Some(header_value);
+                }
                 "base-request" => {
-                    greq_header.base_request = header_value;
+                    greq_header.base_request = Some(header_value);
                 }
                 "output-folder" => {
                     greq_header.output_folder = header_value;
@@ -54,7 +58,7 @@ impl FromString for GreqHeader {
                     greq_header.certificate = header_value;
                 }
                 "is-http" => {
-                    greq_header.is_http = true;
+                    greq_header.is_http = Some(true);
                 }
                 _ => {
                     unknown_headers.push(header_name);
@@ -68,6 +72,50 @@ impl FromString for GreqHeader {
         }
 
         Ok(greq_header)
+    }
+}
+
+impl EnrichWith for GreqHeader {
+    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+    where
+        Self: Sized
+    {
+        // Override values in self with values from object_to_merge if they are not empty
+        if self.project.is_empty() && !object_to_merge.project.is_empty() {
+            self.project = object_to_merge.project.to_string();
+        }
+        if self.output_folder.is_empty() && !object_to_merge.output_folder.is_empty() {
+            self.output_folder = object_to_merge.output_folder.to_string();
+        }
+        if self.output_file_name.is_empty() && !object_to_merge.output_file_name.is_empty() {
+            self.output_file_name = object_to_merge.output_file_name.to_string();
+        }
+        if self.certificate.is_empty() && !object_to_merge.certificate.is_empty() {
+            self.certificate = object_to_merge.certificate.to_string();
+        }
+
+        // Set is_http if not set in self
+        if self.is_http.is_none() {
+            if let Some(is_http_value) = object_to_merge.is_http {
+                self.is_http = Some(is_http_value);
+            }
+        }
+
+        // Set base_request if not set in self
+        if self.base_request.is_none() {
+            if object_to_merge.base_request.is_some() {
+                self.base_request = object_to_merge.base_request.clone(); // Option can use clone
+            }
+        }
+
+        // Set depends_on if not set in self
+        if self.depends_on.is_none() {
+            if object_to_merge.depends_on.is_some() {
+                self.depends_on = object_to_merge.depends_on.clone(); // Option can use clone
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -106,7 +154,7 @@ mod tests {
         assert!(result.is_ok());
         let header = result.unwrap();
         assert_eq!(header.project, "myproject");
-        assert_eq!(header.base_request, "get /api/data");
+        assert_eq!(header.base_request.unwrap_or("".to_string()), "get /api/data");
         assert_eq!(header.output_folder, "/tmp");
         assert_eq!(header.output_file_name, "response.json");
         assert_eq!(header.certificate, "/path/to/certificate.pfx");

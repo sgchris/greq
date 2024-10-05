@@ -1,6 +1,7 @@
-use crate::greq_object::from_string_trait::FromString;
+use crate::greq_object::traits::from_string_trait::FromString;
+use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConditionOperator {
     Equals,
     Contains,
@@ -12,7 +13,7 @@ impl Default for ConditionOperator {
     fn default() -> Self { ConditionOperator::Equals }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct GreqFooterCondition {
     pub is_comment: bool,
     pub key: String,
@@ -55,6 +56,36 @@ impl FromString for GreqFooter {
             original_string,
             conditions,
         })
+    }
+}
+
+impl EnrichWith for GreqFooter {
+    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+    where
+        Self: Sized
+    {
+        // Merge conditions only if self.conditions is empty
+        if self.conditions.is_empty() {
+            if !object_to_merge.conditions.is_empty() {
+                self.conditions = object_to_merge.conditions.clone(); // Clone the conditions
+            }
+        } else {
+            // add conditions from "object_to_merge" that don't exist in self
+            for condition in &object_to_merge.conditions {
+                let condition_exists = self.conditions
+                    .iter()
+                    .find(|existing_self_condition| {
+                        existing_self_condition.key == condition.key
+                    });
+
+                // add the missing footer condition
+                if condition_exists.is_none() {
+                    self.conditions.push(condition.clone());
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -244,5 +275,180 @@ mod tests {
         assert_eq!(footer.conditions.len(), 3);
         assert_eq!(footer.conditions[2].key, "response-content");
         assert!(footer.conditions[2].has_not);
+    }
+
+    #[test]
+    fn test_enrich_with_empty_self_non_empty_merge() {
+        let mut footer_self = GreqFooter::default();
+        let footer_to_merge = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        footer_self.enrich_with(&footer_to_merge).unwrap();
+
+        assert_eq!(footer_self.conditions.len(), 2);
+        assert_eq!(footer_self.conditions[0].key, "key1");
+        assert_eq!(footer_self.conditions[1].key, "key2");
+    }
+
+    #[test]
+    fn test_enrich_with_non_empty_self_empty_merge() {
+        let mut footer_self = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let footer_to_merge = GreqFooter::default();
+
+        footer_self.enrich_with(&footer_to_merge).unwrap();
+
+        // self should remain unchanged
+        assert_eq!(footer_self.conditions.len(), 1);
+        assert_eq!(footer_self.conditions[0].key, "key1");
+    }
+
+    #[test]
+    fn test_enrich_with_non_empty_self_and_merge_no_duplicates() {
+        let mut footer_self = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let footer_to_merge = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(), // same key as in self
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        footer_self.enrich_with(&footer_to_merge).unwrap();
+
+        // Only key2 should be added
+        assert_eq!(footer_self.conditions.len(), 2);
+        assert_eq!(footer_self.conditions[0].key, "key1");
+        assert_eq!(footer_self.conditions[1].key, "key2");
+    }
+
+    #[test]
+    fn test_enrich_with_duplicates_in_both() {
+        let mut footer_self = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let footer_to_merge = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(), // duplicate
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key3".to_string(),
+                    value: "value3".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        footer_self.enrich_with(&footer_to_merge).unwrap();
+
+        // key3 should be added, key1 and key2 should remain
+        assert_eq!(footer_self.conditions.len(), 3);
+        assert_eq!(footer_self.conditions[0].key, "key1");
+        assert_eq!(footer_self.conditions[1].key, "key2");
+        assert_eq!(footer_self.conditions[2].key, "key3");
+    }
+
+    #[test]
+    fn test_enrich_with_mixed_conditions() {
+        let mut footer_self = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key4".to_string(),
+                    value: "value4".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let footer_to_merge = GreqFooter {
+            conditions: vec![
+                GreqFooterCondition {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key2".to_string(), // duplicate
+                    value: "value2".to_string(),
+                    ..Default::default()
+                },
+                GreqFooterCondition {
+                    key: "key3".to_string(),
+                    value: "value3".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        footer_self.enrich_with(&footer_to_merge).unwrap();
+
+        // key1 and key3 should be added, key2 and key4 remain
+        assert_eq!(footer_self.conditions.len(), 4);
+        assert_eq!(footer_self.conditions[0].key, "key2");
+        assert_eq!(footer_self.conditions[1].key, "key4");
+        assert_eq!(footer_self.conditions[2].key, "key1");
+        assert_eq!(footer_self.conditions[3].key, "key3");
     }
 }
