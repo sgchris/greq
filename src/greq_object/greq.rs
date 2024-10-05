@@ -66,6 +66,8 @@ impl FromString for Greq {
 
         print!("parsing content...");
         greq.content = GreqContent::from_string(&sections[1].join("\r\n"))?;
+        // set the default protocol to https
+        greq.content.http_request.is_http = greq.header.is_http.unwrap_or(false);
         println!("done");
 
         print!("parsing footer...");

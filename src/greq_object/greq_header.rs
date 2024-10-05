@@ -236,4 +236,111 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("line without ':' character"));
     }
+
+
+    #[test]
+    fn test_enrich_with_empty_self() {
+        let mut header = GreqHeader {
+            project: String::new(),
+            output_folder: String::new(),
+            output_file_name: String::new(),
+            certificate: String::new(),
+            is_http: None,
+            base_request: None,
+            depends_on: None,
+            ..Default::default()
+        };
+
+        let object_to_merge = GreqHeader {
+            project: String::from("MyProject"),
+            output_folder: String::from("/output/folder"),
+            output_file_name: String::from("output.txt"),
+            certificate: String::from("/path/to/certificate"),
+            is_http: Some(true),
+            base_request: Some(String::from("/path/to/base/request")),
+            depends_on: Some(String::from("/path/to/dependson")),
+            ..Default::default()
+        };
+
+        header.enrich_with(&object_to_merge).unwrap();
+
+        assert_eq!(header.project, "MyProject");
+        assert_eq!(header.output_folder, "/output/folder");
+        assert_eq!(header.output_file_name, "output.txt");
+        assert_eq!(header.certificate, "/path/to/certificate");
+        assert_eq!(header.is_http, Some(true));
+        assert_eq!(header.base_request, Some(String::from("/path/to/base/request")));
+        assert_eq!(header.depends_on, Some(String::from("/path/to/dependson")));
+    }
+
+    #[test]
+    fn test_enrich_with_partial_values() {
+        let mut header = GreqHeader {
+            project: String::from("ExistingProject"),
+            output_folder: String::new(),
+            output_file_name: String::from("existing_output.txt"),
+            certificate: String::new(),
+            is_http: Some(false),
+            base_request: None,
+            depends_on: Some(String::from("/path/to/depends/on")),
+            ..Default::default()
+        };
+
+        let object_to_merge = GreqHeader {
+            project: String::from("NewProject"),
+            output_folder: String::from("/new/output/folder"),
+            output_file_name: String::from("new_output.txt"),
+            certificate: String::from("/new/path/to/certificate"),
+            is_http: Some(true),
+            base_request: Some(String::from("/new/path/to/base/request")),
+            depends_on: Some(String::from("/new/path/to/depends/on")),
+            ..Default::default()
+        };
+
+        header.enrich_with(&object_to_merge).unwrap();
+
+        assert_eq!(header.project, "ExistingProject"); // Not overridden
+        assert_eq!(header.output_folder, "/new/output/folder");
+        assert_eq!(header.output_file_name, "existing_output.txt"); // Not overridden
+        assert_eq!(header.certificate, "/new/path/to/certificate");
+        assert_eq!(header.is_http, Some(false)); // Not overridden
+        assert_eq!(header.base_request, Some(String::from("/new/path/to/base/request")));
+        assert_eq!(header.depends_on, Some(String::from("/path/to/depends/on"))); // Not overridden
+    }
+
+    #[test]
+    fn test_enrich_with_no_changes() {
+        let mut header = GreqHeader {
+            project: String::from("ExistingProject"),
+            output_folder: String::from("/existing/output/folder"),
+            output_file_name: String::from("existing_output.txt"),
+            certificate: String::from("/existing/path/to/certificate"),
+            is_http: Some(false),
+            base_request: Some(String::from("/existing/path/to/base/request")),
+            depends_on: Some(String::from("/existing/path/to/depends/on")),
+            ..Default::default()
+        };
+
+        let object_to_merge = GreqHeader {
+            project: String::from("NewProject"),
+            output_folder: String::from("/new/output/folder"),
+            output_file_name: String::from("new_output.txt"),
+            certificate: String::from("/new/path/to/certificate"),
+            is_http: Some(true),
+            base_request: Some(String::from("/new/path/to/base/request")),
+            depends_on: Some(String::from("/new/path/to/depends/on")),
+            ..Default::default()
+        };
+
+        header.enrich_with(&object_to_merge).unwrap();
+
+        // No fields should be changed
+        assert_eq!(header.project, "ExistingProject");
+        assert_eq!(header.output_folder, "/existing/output/folder");
+        assert_eq!(header.output_file_name, "existing_output.txt");
+        assert_eq!(header.certificate, "/existing/path/to/certificate");
+        assert_eq!(header.is_http, Some(false));
+        assert_eq!(header.base_request, Some(String::from("/existing/path/to/base/request")));
+        assert_eq!(header.depends_on, Some(String::from("/existing/path/to/depends/on")));
+    }
 }
