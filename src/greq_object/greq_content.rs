@@ -58,19 +58,31 @@ impl FromString for GreqContent {
             if is_content_line {
                 content_lines.push(line)
             } else if let Some((key, value)) = line.split_once(':') {
+                http_request
+                    .headers
+                    .insert(key.trim().to_string(), value.trim().to_string());
+
+                // check the special case of "host" header
                 if key.to_lowercase() == "host" {
-                    let (hostname, port_string) = value.split_once(":").unwrap_or_default();
+                    // check if port supplied
+                    let hostname: &str;
+                    let mut port_string: &str = "";
+                    if value.contains(":") {
+                        (hostname, port_string) = value.split_once(":")
+                            .map_or(("", ""), |value_part| (value_part.0.trim(), value_part.1.trim()));
+                    } else {
+                        hostname = value.trim();
+                    }
+
                     if !hostname.is_empty() {
                         http_request.hostname = hostname.to_string();
+                    } else {
+                        return Err(format!("Missing host"));
                     }
 
                     if !port_string.is_empty() {
                         http_request.port = port_string.trim().parse::<u16>().unwrap_or_else(|_| 443);
                     }
-                } else {
-                    http_request
-                        .headers
-                        .insert(key.trim().to_string(), value.trim().to_string());
                 }
             } else {
                 return Err(format!("Invalid header line: {}", line));
@@ -148,8 +160,8 @@ mod tests {
         let greq = result.unwrap();
         assert_eq!(greq.http_request.method, "GET");
         assert_eq!(greq.http_request.uri, "/index.html");
-        assert_eq!(greq.http_request.headers.get("Host").unwrap(), "localhost");
-        assert_eq!(greq.http_request.headers.get("User-Agent").unwrap(), "curl");
+        assert_eq!(greq.http_request.headers.get("Host").unwrap_or(&"".to_string()), "localhost");
+        assert_eq!(greq.http_request.headers.get("User-Agent").unwrap_or(&"".to_string()), "curl");
         assert_eq!(greq.http_request.content, "");
     }
 
@@ -175,7 +187,7 @@ mod tests {
         let greq = result.unwrap();
         assert_eq!(greq.http_request.method, "GET");
         assert_eq!(greq.http_request.uri, "/index.html");
-        assert_eq!(greq.http_request.headers.get("Host").unwrap_or(&"".to_string()), "");
+        assert_eq!(greq.http_request.headers.get("Host").unwrap_or(&"".to_string()), "localhost");
         assert_eq!(greq.http_request.content, "This is the body content");
     }
 

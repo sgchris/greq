@@ -16,7 +16,7 @@ pub struct GreqHeader {
 
     // the request that this file extends
     pub base_request: Option<String>,
-    // execute that request before executing this one
+    // get_response that request before executing this one
     pub depends_on: Option<String>,
 }
 

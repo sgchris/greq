@@ -95,12 +95,30 @@ impl EnrichWith for Greq {
  */
 
 impl Greq {
-    pub async fn execute(&self) -> Result<GreqResponse, String> {
+    pub fn execute(&self) -> Result<String, String> {
+
+        if let Some(ref depends_on_request_path) = self.header.depends_on {
+            // get_response the dependant request
+            let dependant_request = Greq::from_file(depends_on_request_path)?;
+            let dependency_result = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(dependant_request.get_response());
+        }
+
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(self.get_response())?;
+
+        Ok(result.get_raw_response())
+    }
+
+    pub async fn get_response(&self) -> Result<GreqResponse, String> {
         // Create a reqwest client
         let client = Client::new();
 
         // Set up the request builder based on the method in `Greq`
         let full_url = self.content.http_request.get_full_url();
+        println!("sending request to {}.\r\nself.content.http_request: {:?}\r\n", full_url, self.content.http_request);
         let request_builder = match self.content.http_request.method.to_lowercase().as_str() {
             "get" => client.get(full_url),
             "post" => client.post(full_url),
@@ -159,14 +177,6 @@ impl Greq {
         if let Some(ref base_request_path) = greq.header.base_request {
             let base_greq = Greq::from_file(base_request_path)?;
             greq.enrich_with(&base_greq)?;
-        }
-
-        if let Some(ref depends_on_request_path) = greq.header.depends_on {
-            // execute the dependant request
-            let dependant_request = Greq::from_file(depends_on_request_path)?;
-            let result = tokio::runtime::Runtime::new()
-                .unwrap()
-                .block_on(dependant_request.execute());
         }
 
         Ok(greq)

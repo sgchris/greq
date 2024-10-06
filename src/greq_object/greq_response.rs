@@ -18,6 +18,26 @@ impl GreqResponse {
         }
     }
 
+    pub fn get_raw_response(&self) -> String {
+        // Start with the status line
+        let mut raw_response = format!("HTTP/1.1 {} {}\r\n", self.status_code, self.reason_phrase);
+
+        // Add headers
+        for (key, value) in &self.headers {
+            raw_response.push_str(&format!("{}: {}\r\n", key, value));
+        }
+
+        // Add the blank line between headers and body
+        raw_response.push_str("\r\n");
+
+        // Add the body if it exists
+        if let Some(ref body_content) = self.body {
+            raw_response.push_str(body_content);
+        }
+
+        raw_response
+    }
+
     pub fn add_header(&mut self, key: &str, value: &str) {
         self.headers.insert(key.to_string(), value.to_string());
     }

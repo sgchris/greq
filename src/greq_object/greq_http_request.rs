@@ -23,7 +23,7 @@ impl GreqHttpRequest {
         let default_port = if protocol == "http" { 80 } else { 443 };
 
         // Construct the host part, including the port only if it's not the default one
-        let host = if self.port != default_port {
+        let host = if self.port != default_port && self.port != 0 {
             format!("{}:{}", self.hostname, self.port)
         } else {
             self.hostname.clone()
