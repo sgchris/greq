@@ -226,6 +226,7 @@ impl Greq {
         let json_obj = serde_json::from_str::<Value>(json_string.as_str());
         if json_obj.is_err() {
             println!("Error parsing json string. {}", json_obj.unwrap_err());
+            println!("{}", json_string);
             json_string
         } else {
             serde_json::to_string_pretty(&json_obj.unwrap()).unwrap()

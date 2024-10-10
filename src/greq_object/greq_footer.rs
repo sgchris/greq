@@ -1,7 +1,7 @@
 use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
 use crate::greq_object::traits::from_string_trait::FromString;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
-
+use crate::json_string;
 
 /// The footer element containing all the test conditions
 #[derive(Debug, Default)]
@@ -161,12 +161,12 @@ impl GreqFooter {
 
         format!(
             "{{
-  \"original_string\": \"{}\",
+  \"original_string\": {},
   \"conditions\": [
     {}
   ]
 }}",
-            self.original_string,
+            json_string!(&self.original_string),
             conditions_str
         )
     }

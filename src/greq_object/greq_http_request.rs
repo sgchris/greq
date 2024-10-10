@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::json_string;
 
 // Single request properties
 #[derive(Debug, Default)]
@@ -36,7 +37,7 @@ impl GreqHttpRequest {
     pub fn as_string(&self) -> String {
         let headers: Vec<String> = self.headers
             .iter()
-            .map(|(k, v)| format!("      \"{}\": \"{}\"", k, v))
+            .map(|(k, v)| format!("      \"{}\": {}", k, json_string!(v)))
             .collect();
         let headers_str = headers.join(",\n");
 

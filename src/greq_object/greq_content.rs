@@ -3,6 +3,7 @@ use crate::greq_object::traits::from_string_trait::FromString;
 use std::collections::HashMap;
 use regex::Regex;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
+use crate::json_string;
 
 #[derive(Debug, Default)]
 pub struct GreqContent {
@@ -128,10 +129,10 @@ impl GreqContent {
     pub fn as_string(&self) -> String {
         format!(
             "{{
-  \"original_string\": \"{}\",
+  \"original_string\": {},
   \"http_request\": {}
 }}",
-            serde_json::to_string(self.original_string.as_str()).unwrap_or(String::from("")),
+            json_string!(&self.original_string),
             self.http_request.as_string()
         )
     }
