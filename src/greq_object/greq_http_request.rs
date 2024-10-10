@@ -32,4 +32,37 @@ impl GreqHttpRequest {
         // Build and return the full URL
         format!("{}://{}{}", protocol, host, self.uri)
     }
+
+    pub fn as_string(&self) -> String {
+        let headers: Vec<String> = self.headers
+            .iter()
+            .map(|(k, v)| format!("      \"{}\": \"{}\"", k, v))
+            .collect();
+        let headers_str = headers.join(",\n");
+
+        format!(
+            "{{
+    \"is_http\": {},
+    \"certificate\": \"{}\",
+    \"method\": \"{}\",
+    \"hostname\": \"{}\",
+    \"port\": {},
+    \"http_version\": \"{}\",
+    \"uri\": \"{}\",
+    \"headers\": {{
+{}
+    }},
+    \"content\": \"{}\"
+}}",
+            self.is_http,
+            self.certificate,
+            self.method,
+            self.hostname,
+            self.port,
+            self.http_version,
+            self.uri,
+            headers_str,
+            self.content.replace("\"", "\\\"").replace("\n", "\\n")
+        )
+    }
 }

@@ -1,29 +1,7 @@
+use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
 use crate::greq_object::traits::from_string_trait::FromString;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ConditionOperator {
-    Equals,
-    Contains,
-    StartsWith,
-    EndsWith,
-}
-
-impl Default for ConditionOperator {
-    fn default() -> Self { ConditionOperator::Equals }
-}
-
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct GreqFooterCondition {
-    pub is_comment: bool,
-    pub key: String,
-    pub value: String,
-    pub is_regex: bool,
-    pub is_case_sensitive: bool,
-    pub operator: ConditionOperator, // "equals", "contains", "starts-with", etc.
-    pub has_not: bool,
-    pub has_or: bool,
-}
 
 /// The footer element containing all the test conditions
 #[derive(Debug, Default)]
@@ -175,6 +153,22 @@ impl GreqFooter {
 
         // Create the condition
         Ok(condition_line)
+    }
+
+    pub fn as_string(&self) -> String {
+        let conditions: Vec<String> = self.conditions.iter().map(|c| c.as_string()).collect();
+        let conditions_str = conditions.join(",\n    ");
+
+        format!(
+            "{{
+  \"original_string\": \"{}\",
+  \"conditions\": [
+    {}
+  ]
+}}",
+            self.original_string,
+            conditions_str
+        )
     }
 }
 

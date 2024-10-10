@@ -137,6 +137,39 @@ impl GreqHeader {
 
         Ok(true)
     }
+
+    pub fn as_string(&self) -> String {
+        let mut result = String::new();
+
+        result.push_str("{\n");
+        result.push_str(&format!("  \"original_string\": \"{}\",\n", serde_json::to_string(self.original_string.as_str()).unwrap_or(String::from(""))));
+        result.push_str(&format!("  \"project\": \"{}\",\n", serde_json::to_string(self.project.as_str()).unwrap_or(String::from(""))));
+        result.push_str(&format!("  \"output_folder\": \"{}\",\n", serde_json::to_string(self.output_folder.as_str()).unwrap_or(String::from(""))));
+        result.push_str(&format!("  \"output_file_name\": \"{}\",\n", serde_json::to_string(self.output_file_name.as_str()).unwrap_or(String::from(""))));
+        result.push_str(&format!("  \"certificate\": \"{}\",\n", serde_json::to_string(self.certificate.as_str()).unwrap_or(String::from(""))));
+
+        if let Some(is_http) = self.is_http {
+            result.push_str("  \"is_http\": true,\n");
+        } else {
+            result.push_str("  \"is_http\": false,\n");
+        }
+
+        if let Some(base_request) = &self.base_request {
+            result.push_str(&format!("  \"base_request\": \"{}\",\n", serde_json::to_string(base_request.as_str()).unwrap_or(String::from(""))));
+        } else {
+            result.push_str("  \"base_request\": null,\n");
+        }
+
+        if let Some(depends_on) = &self.depends_on {
+            result.push_str(&format!("  \"depends_on\": \"{}\"\n", serde_json::to_string(depends_on.as_str()).unwrap_or(String::from(""))));
+        } else {
+            result.push_str("  \"depends_on\": null\n");
+        }
+
+        result.push_str("}");
+
+        result
+    }
 }
 
 #[cfg(test)]

@@ -5,3 +5,4 @@ pub mod greq_header;
 pub mod greq_http_request;
 pub mod greq_response;
 pub mod traits;
+mod greq_footer_condition;

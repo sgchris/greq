@@ -124,6 +124,17 @@ impl GreqContent {
         let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
         re.is_match(version)
     }
+
+    pub fn as_string(&self) -> String {
+        format!(
+            "{{
+  \"original_string\": \"{}\",
+  \"http_request\": {}
+}}",
+            serde_json::to_string(self.original_string.as_str()).unwrap_or(String::from("")),
+            self.http_request.as_string()
+        )
+    }
 }
 
 #[cfg(test)]

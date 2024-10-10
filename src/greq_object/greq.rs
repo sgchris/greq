@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 use reqwest::Client;
-
+use serde_json::{json, Value};
 use crate::greq_object::greq_content::GreqContent;
 use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
@@ -90,9 +90,6 @@ impl EnrichWith for Greq {
         Ok(())
     }
 }
-
-/*
- */
 
 impl Greq {
     pub fn execute(&self) -> Result<String, String> {
@@ -196,6 +193,43 @@ impl Greq {
         let mut contents = String::new();
         file.read_to_string(&mut contents)?; // Read the file contents into the string
         Ok(contents) // Return the contents as a result
+    }
+
+    pub fn as_string_old(&self) -> String {
+        // Create a JSON Value
+        let json_value: Value = json!({
+            "file_contents": self.file_contents,
+            "header": serde_json::from_str::<Value>(&self.header.as_string()).unwrap(),
+            "content": serde_json::from_str::<Value>(&self.content.as_string()).unwrap(),
+            "footer": serde_json::from_str::<Value>(&self.footer.as_string()).unwrap()
+        });
+
+        // Convert the JSON Value to a pretty-printed string
+        serde_json::to_string_pretty(&json_value).unwrap()
+    }
+
+    pub fn as_string(&self) -> String {
+        let json_string = format!(
+            "{{
+  \"file_contents\": \"{}\",
+  \"header\": {},
+  \"content\": {},
+  \"footer\": {}
+}}",
+            self.file_contents.replace("\"", "\\\"").replace("\n", "\\n"),
+            self.header.as_string(),
+            self.content.as_string(),
+            self.footer.as_string()
+        );
+
+
+        let json_obj = serde_json::from_str::<Value>(json_string.as_str());
+        if json_obj.is_err() {
+            println!("Error parsing json string. {}", json_obj.unwrap_err());
+            json_string
+        } else {
+            serde_json::to_string_pretty(&json_obj.unwrap()).unwrap()
+        }
     }
 }
 

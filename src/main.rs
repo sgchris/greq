@@ -4,6 +4,7 @@
 use crate::greq_object::greq::Greq;
 
 mod greq_object;
+mod cli_parameters;
 
 fn main() {
     let input_file_path = String::from("sample_greqs/sample1.greq");
@@ -14,6 +15,8 @@ fn main() {
     }
 
     let greq = greq_obj.unwrap();
+    println!("Greq: {}", greq.as_string());
+
     let results = greq.execute();
 
     if results.is_err() {
