@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use crate::json_string;
+use serde::{Deserialize, Serialize};
 
 // Single request properties
-#[derive(Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GreqHttpRequest {
     pub is_http: bool,
     pub certificate: String,
@@ -32,38 +32,5 @@ impl GreqHttpRequest {
 
         // Build and return the full URL
         format!("{}://{}{}", protocol, host, self.uri)
-    }
-
-    pub fn as_string(&self) -> String {
-        let headers: Vec<String> = self.headers
-            .iter()
-            .map(|(k, v)| format!("      \"{}\": {}", k, json_string!(v)))
-            .collect();
-        let headers_str = headers.join(",\n");
-
-        format!(
-            "{{
-    \"is_http\": {},
-    \"certificate\": \"{}\",
-    \"method\": \"{}\",
-    \"hostname\": \"{}\",
-    \"port\": {},
-    \"http_version\": \"{}\",
-    \"uri\": \"{}\",
-    \"headers\": {{
-{}
-    }},
-    \"content\": \"{}\"
-}}",
-            self.is_http,
-            self.certificate,
-            self.method,
-            self.hostname,
-            self.port,
-            self.http_version,
-            self.uri,
-            headers_str,
-            self.content.replace("\"", "\\\"").replace("\n", "\\n")
-        )
     }
 }

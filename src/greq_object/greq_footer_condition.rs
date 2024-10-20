@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ConditionOperator {
     Equals,
     Contains,
@@ -21,7 +23,7 @@ impl std::fmt::Display for ConditionOperator {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct GreqFooterCondition {
     pub is_comment: bool,
     pub key: String,
@@ -31,30 +33,4 @@ pub struct GreqFooterCondition {
     pub operator: ConditionOperator, // "equals", "contains", "starts-with", etc.
     pub has_not: bool,
     pub has_or: bool,
-}
-
-
-impl GreqFooterCondition {
-    pub fn as_string(&self) -> String {
-        format!(
-            "{{
-    \"is_comment\": {},
-    \"key\": \"{}\",
-    \"value\": \"{}\",
-    \"is_regex\": {},
-    \"is_case_sensitive\": {},
-    \"operator\": \"{}\",
-    \"has_not\": {},
-    \"has_or\": {}
-}}",
-            self.is_comment,
-            self.key,
-            self.value,
-            self.is_regex,
-            self.is_case_sensitive,
-            self.operator,
-            self.has_not,
-            self.has_or
-        )
-    }
 }

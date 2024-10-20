@@ -1,10 +1,10 @@
+use serde::{Deserialize, Serialize};
 use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
 use crate::greq_object::traits::from_string_trait::FromString;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
-use crate::json_string;
 
 /// The footer element containing all the test conditions
-#[derive(Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GreqFooter {
     pub original_string: String,
     pub conditions: Vec<GreqFooterCondition>,
@@ -153,22 +153,6 @@ impl GreqFooter {
 
         // Create the condition
         Ok(condition_line)
-    }
-
-    pub fn as_string(&self) -> String {
-        let conditions: Vec<String> = self.conditions.iter().map(|c| c.as_string()).collect();
-        let conditions_str = conditions.join(",\n    ");
-
-        format!(
-            "{{
-  \"original_string\": {},
-  \"conditions\": [
-    {}
-  ]
-}}",
-            json_string!(&self.original_string),
-            conditions_str
-        )
     }
 }
 

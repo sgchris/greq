@@ -2,10 +2,10 @@ use crate::greq_object::greq_http_request::GreqHttpRequest;
 use crate::greq_object::traits::from_string_trait::FromString;
 use std::collections::HashMap;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
-use crate::json_string;
 
-#[derive(Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GreqContent {
     pub original_string: String,
     pub http_request: GreqHttpRequest,
@@ -124,17 +124,6 @@ impl GreqContent {
         // Define the regex pattern for "HTTP/x.y" format
         let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
         re.is_match(version)
-    }
-
-    pub fn as_string(&self) -> String {
-        format!(
-            "{{
-  \"original_string\": {},
-  \"http_request\": {}
-}}",
-            json_string!(&self.original_string),
-            self.http_request.as_string()
-        )
     }
 }
 

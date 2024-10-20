@@ -1,8 +1,9 @@
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+use futures::future::BoxFuture;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
 use crate::greq_object::greq_content::GreqContent;
 use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
@@ -12,7 +13,7 @@ use crate::greq_object::greq_response::GreqResponse;
 use crate::greq_object::traits::from_string_trait::FromString;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
-#[derive(Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Greq {
     file_contents: String,
     header: GreqHeader,
@@ -92,21 +93,27 @@ impl EnrichWith for Greq {
 }
 
 impl Greq {
-    pub fn execute(&self) -> Result<String, String> {
+    // Add a new boxed version of the `execute` function to handle recursion.
+    fn boxed_execute(&self) -> BoxFuture<'_, Result<(Option<bool>, String), String>> {
+        Box::pin(self.execute())
+    }
+
+    /// execute the request and return the evaluation result and the raw response.
+    pub async fn execute(&self) -> Result<(Option<bool>, String), String> {
 
         if let Some(ref depends_on_request_path) = self.header.depends_on {
             // get_response the dependant request
             let dependant_request = Greq::from_file(depends_on_request_path)?;
-            let dependency_result = tokio::runtime::Runtime::new()
-                .unwrap()
-                .block_on(dependant_request.get_response());
+            dependant_request.boxed_execute().await?;
         }
 
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(self.get_response())?;
+        let result = self.get_response().await;
+        if result.is_err() {
+            return Err(result.err().unwrap());
+        }
 
-        Ok(result.get_raw_response())
+        let evaluation_result = self.evaluate().unwrap_or_else(|_| false);
+        Ok((Some(evaluation_result), result.unwrap().body.unwrap()))
     }
 
     pub async fn get_response(&self) -> Result<GreqResponse, String> {
@@ -195,42 +202,8 @@ impl Greq {
         Ok(contents) // Return the contents as a result
     }
 
-    pub fn as_string_old(&self) -> String {
-        // Create a JSON Value
-        let json_value: Value = json!({
-            "file_contents": self.file_contents,
-            "header": serde_json::from_str::<Value>(&self.header.as_string()).unwrap(),
-            "content": serde_json::from_str::<Value>(&self.content.as_string()).unwrap(),
-            "footer": serde_json::from_str::<Value>(&self.footer.as_string()).unwrap()
-        });
-
-        // Convert the JSON Value to a pretty-printed string
-        serde_json::to_string_pretty(&json_value).unwrap()
-    }
-
-    pub fn as_string(&self) -> String {
-        let json_string = format!(
-            "{{
-  \"file_contents\": \"{}\",
-  \"header\": {},
-  \"content\": {},
-  \"footer\": {}
-}}",
-            self.file_contents.replace("\"", "\\\"").replace("\n", "\\n"),
-            self.header.as_string(),
-            self.content.as_string(),
-            self.footer.as_string()
-        );
-
-
-        let json_obj = serde_json::from_str::<Value>(json_string.as_str());
-        if json_obj.is_err() {
-            println!("Error parsing json string. {}", json_obj.unwrap_err());
-            println!("{}", json_string);
-            json_string
-        } else {
-            serde_json::to_string_pretty(&json_obj.unwrap()).unwrap()
-        }
+    fn evaluate(&self) -> Result<bool, String> {
+        Ok(true)
     }
 }
 

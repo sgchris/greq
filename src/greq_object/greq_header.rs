@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::from_string_trait::FromString;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
-use crate::json_string;
 
-#[derive(Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GreqHeader {
     pub original_string: String,
 
@@ -137,39 +137,6 @@ impl GreqHeader {
         }
 
         Ok(true)
-    }
-
-    pub fn as_string(&self) -> String {
-        let mut result = String::new();
-
-        result.push_str("{\n");
-        result.push_str(&format!("  \"original_string\": {},\n", json_string!(&self.original_string)));
-        result.push_str(&format!("  \"project\": {},\n", json_string!(&self.project)));
-        result.push_str(&format!("  \"output_folder\": {},\n", json_string!(&self.output_folder)));
-        result.push_str(&format!("  \"output_file_name\": {},\n", json_string!(&self.output_file_name)));
-        result.push_str(&format!("  \"certificate\": {},\n", json_string!(&self.certificate)));
-
-        if let Some(is_http) = self.is_http {
-            result.push_str("  \"is_http\": true,\n");
-        } else {
-            result.push_str("  \"is_http\": false,\n");
-        }
-
-        if let Some(base_request) = &self.base_request {
-            result.push_str(&format!("  \"base_request\": {},\n", json_string!(base_request)));
-        } else {
-            result.push_str("  \"base_request\": null,\n");
-        }
-
-        if let Some(depends_on) = &self.depends_on {
-            result.push_str(&format!("  \"depends_on\": {}\n", json_string!(depends_on)));
-        } else {
-            result.push_str("  \"depends_on\": null\n");
-        }
-
-        result.push_str("}");
-
-        result
     }
 }
 
