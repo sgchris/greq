@@ -1,10 +1,12 @@
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
-use crate::greq_object::traits::from_string_trait::FromString;
+use crate::greq_object::greq_footer::GreqFooterErrorCodes;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GreqHeader {
     pub original_string: String,
+    pub delimiter: char, // the delimiter character to separate sections. Default '='
 
     pub project: String,          // the name of the project. Will be implemented.
     pub output_folder: String,    // path to a destination folder. Default current.
@@ -21,8 +23,53 @@ pub struct GreqHeader {
     pub depends_on: Option<String>,
 }
 
-impl FromString for GreqHeader {
-    fn from_string(contents: &str) -> Result<GreqHeader, String> {
+impl Default for GreqHeader {
+    fn default() -> Self {
+        Self {
+            delimiter: '=',
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum GreqHeaderErrorCodes {
+    UnknownHeader,
+    LineHasNoColonSign,
+}
+
+#[derive(Debug)]
+pub struct GreqHeaderError {
+    pub code: GreqHeaderErrorCodes,
+    pub message: String
+}
+
+impl GreqHeaderErrorCodes {
+    pub fn error_message(&self) -> &'static str {
+        match self {
+            GreqHeaderErrorCodes::UnknownHeader => "Unknown header.",
+            GreqHeaderErrorCodes::LineHasNoColonSign => "The line does not contain a colon sign.",
+            _ => "Unrecognized header error",
+        }
+    }
+}
+
+impl GreqHeaderError {
+    pub fn new(code: GreqHeaderErrorCodes, message: &str) -> Self {
+        Self { code, message: message.to_string() }
+    }
+
+    pub fn from_error_code(code: GreqHeaderErrorCodes) -> Self {
+        let error_message = code.error_message();
+        Self::new(code, error_message)
+    }
+}
+
+
+impl FromStr for GreqHeader {
+    type Err = GreqHeaderError;
+
+    fn from_str(contents: &str) -> Result<GreqHeader, Self::Err> {
         // validate the contents
         GreqHeader::is_valid(contents)?;
 
@@ -32,9 +79,8 @@ impl FromString for GreqHeader {
             ..Default::default()
         };
 
-        let mut unknown_headers: Vec<&str> = vec![];
         // parse lines and assign properties
-        contents.lines().for_each(|line| {
+        contents.lines().try_for_each(|line| {
             let line_parts: Vec<&str> = line.split(":").collect();
             let header_name: &str = line_parts[0].trim();
             let header_value = line_parts[1..].join(":").trim().to_lowercase().to_string();
@@ -62,15 +108,12 @@ impl FromString for GreqHeader {
                     greq_header.is_http = Some(true);
                 }
                 _ => {
-                    unknown_headers.push(header_name);
+                    return Err(GreqHeaderError::from_error_code(GreqHeaderErrorCodes::UnknownHeader));
                 }
             }
-        });
 
-        if !unknown_headers.is_empty() {
-            // Return an error with the formatted message
-            return Err(format!("unknown headers: {}", unknown_headers.join(", ")));
-        }
+            Ok(())
+        })?;
 
         Ok(greq_header)
     }
@@ -122,18 +165,14 @@ impl EnrichWith for GreqHeader {
 
 impl GreqHeader {
     // should be public as it's used as static
-    pub fn is_valid(contents: &str) -> Result<bool, String> {
+    pub fn is_valid(contents: &str) -> Result<bool, GreqHeaderError> {
         // empty contents allowed
         if contents.trim().is_empty() {
             return Ok(true);
         }
 
-        if contents.lines().find(|line| line.trim().is_empty()).is_some() {
-            return Err("empty line in the header".to_string());
-        }
-
         if contents.lines().find(|line| !line.trim().contains(":")).is_some() {
-            return Err("line without ':' character".to_string());
+            return Err(GreqHeaderError::from_error_code(GreqHeaderErrorCodes::LineHasNoColonSign));
         }
 
         Ok(true)
@@ -151,7 +190,7 @@ mod tests {
                      output-folder: /tmp\n\
                      output-file-name: response.json\n\
                      certificate: /path/to/certificate.pfx";
-        let result = GreqHeader::from_string(input);
+        let result = GreqHeader::from_str(input);
         assert!(result.is_ok());
         let header = result.unwrap();
         assert_eq!(header.project, "myproject");
@@ -164,7 +203,7 @@ mod tests {
     #[test]
     fn test_empty_input() {
         let input = "";
-        let result = GreqHeader::from_string(input);
+        let result = GreqHeader::from_str(input);
         assert!(result.is_ok());
         let header = result.unwrap();
         assert_eq!(header.original_string, "");
@@ -174,19 +213,9 @@ mod tests {
     fn test_invalid_format_missing_colon() {
         let input = "project MyProject\n\
                      base-request: GET /api/data";
-        let result = GreqHeader::from_string(input);
+        let result = GreqHeader::from_str(input);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "line without ':' character");
-    }
-
-    #[test]
-    fn test_invalid_format_empty_line() {
-        let input = "project: MyProject\n\
-                     \n\
-                     base-request: GET /api/data";
-        let result = GreqHeader::from_string(input);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "empty line in the header");
+        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::UnknownHeader);
     }
 
     #[test]
@@ -194,9 +223,9 @@ mod tests {
         let input = "project: MyProject\n\
                      unknown-header: some value\n\
                      base-request: GET /api/data";
-        let result = GreqHeader::from_string(input);
+        let result = GreqHeader::from_str(input);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("unknown headers: unknown-header"));
+        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::UnknownHeader);
     }
 
     #[test]
@@ -206,7 +235,7 @@ mod tests {
                      output-folder: /var/tmp\n\
                      base-request: GET /api/data\n\
                      certificate: /path/to/certificate.pfx";
-        let result = GreqHeader::from_string(input);
+        let result = GreqHeader::from_str(input);
         assert!(result.is_ok());
         let header = result.unwrap();
         assert_eq!(header.output_folder, "/var/tmp"); // Last occurrence should overwrite previous
@@ -220,24 +249,13 @@ mod tests {
     }
 
     #[test]
-    fn test_is_valid_with_empty_lines() {
-        let input = "project: MyProject\n\
-                     \n\
-                     base-request: GET /api/data";
-        let result = GreqHeader::is_valid(input);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("empty line in the header"));
-    }
-
-    #[test]
     fn test_is_valid_no_colon() {
         let input = "project MyProject\n\
                      base-request: GET /api/data";
         let result = GreqHeader::is_valid(input);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("line without ':' character"));
+        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::LineHasNoColonSign);
     }
-
 
     #[test]
     fn test_enrich_with_empty_self() {

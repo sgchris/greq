@@ -1,0 +1,8 @@
+project: greq samples
+delimiter: $
+is-http: true
+$$$$
+GET /
+host: localhost
+$$$$
+status-code: 200

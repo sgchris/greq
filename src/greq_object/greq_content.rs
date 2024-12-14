@@ -1,6 +1,6 @@
 use crate::greq_object::greq_http_request::GreqHttpRequest;
-use crate::greq_object::traits::from_string_trait::FromString;
 use std::collections::HashMap;
+use std::str::FromStr;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
@@ -11,32 +11,75 @@ pub struct GreqContent {
     pub http_request: GreqHttpRequest,
 }
 
-impl FromString for GreqContent {
-    fn from_string(contents: &str) -> Result<GreqContent, String> {
+#[derive(Debug, PartialEq)]
+pub enum GreqContentErrorCodes {
+    EmptyContent,
+    MissingRequestLine,
+    MissingHttpMethod,
+    MissingUri,
+    InvalidHttpVersion,
+    MissingHost,
+    InvalidHeaderLine,
+}
+
+#[derive(Debug)]
+pub struct GreqContentError {
+    pub code: GreqContentErrorCodes,
+    pub message: String
+}
+
+impl GreqContentErrorCodes {
+    pub fn error_message(&self) -> &'static str {
+        match self {
+            GreqContentErrorCodes::EmptyContent => "Empty content.",
+            _ => "Unrecognized content error",
+        }
+    }
+}
+
+impl GreqContentError {
+    pub fn new(code: GreqContentErrorCodes, message: &str) -> Self {
+        Self { code, message: message.to_string() }
+    }
+
+    pub fn from_error_code(code: GreqContentErrorCodes) -> Self {
+        let error_message = code.error_message();
+        Self::new(code, error_message)
+    }
+}
+
+impl FromStr for GreqContent {
+    type Err = GreqContentError;
+
+    fn from_str(contents: &str) -> Result<GreqContent, Self::Err> {
         // empty contents are not allowed
         if contents.trim().is_empty() {
-            return Err("empty contents".to_string());
+            return Err(GreqContentError::from_error_code(GreqContentErrorCodes::EmptyContent));
         }
 
         let mut lines = contents.lines();
 
         // Parse the request line
-        let request_line = lines.next().ok_or("Missing request line")?;
+        let request_line = lines.next().ok_or(GreqContentError::from_error_code(GreqContentErrorCodes::MissingRequestLine))?;
         let mut request_parts = request_line.split_whitespace();
+
+        // parse the method (GET/POST/...)
         let method = request_parts
             .next()
-            .ok_or("Missing HTTP method")?
+            .ok_or(GreqContentError::from_error_code(GreqContentErrorCodes::MissingHttpMethod))?
             .to_string();
         if !Self::method_is_valid(&method) {
-            return Err("Missing HTTP method".to_string());
+            return Err(GreqContentError::from_error_code(GreqContentErrorCodes::MissingHttpMethod));
         }
 
-        let uri = request_parts.next().ok_or("Missing URI")?.to_string();
-        if Self::is_valid_http_version(&uri) {
-            return Err("Missing URI".to_string());
-        }
+        // Parse the URI
+        let uri = request_parts.next().ok_or(GreqContentError::from_error_code(GreqContentErrorCodes::MissingUri))?.to_string();
 
+        // Parse the HTTP version
         let http_version = request_parts.next().unwrap_or("HTTP/1.1").to_string();
+        if Self::is_valid_http_version(&http_version) {
+            return Err(GreqContentError::from_error_code(GreqContentErrorCodes::InvalidHttpVersion));
+        }
 
         // Initialize the HTTP request
         let mut http_request = GreqHttpRequest {
@@ -47,7 +90,7 @@ impl FromString for GreqContent {
             ..Default::default()
         };
 
-        // Parse headers
+        // Parse the headers and the content
         let mut content_lines: Vec<&str> = vec![];
         let mut is_content_line = false;
         for line in lines.by_ref() {
@@ -78,7 +121,7 @@ impl FromString for GreqContent {
                     if !hostname.is_empty() {
                         http_request.hostname = hostname.to_string();
                     } else {
-                        return Err(format!("Missing host"));
+                        return Err(GreqContentError::from_error_code(GreqContentErrorCodes::MissingHost));
                     }
 
                     if !port_string.is_empty() {
@@ -86,7 +129,7 @@ impl FromString for GreqContent {
                     }
                 }
             } else {
-                return Err(format!("Invalid header line: {}", line));
+                return Err(GreqContentError::from_error_code(GreqContentErrorCodes::InvalidHeaderLine));
             }
         }
 
@@ -130,19 +173,20 @@ impl GreqContent {
 #[cfg(test)]
 #[cfg(test)]
 mod tests {
+    use crate::greq_object::greq_header::GreqHeaderErrorCodes;
     use super::*;
 
     #[test]
     fn test_empty_contents() {
-        let result = GreqContent::from_string("");
+        let result = GreqContent::from_str("");
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "empty contents".to_string());
+        assert_eq!(result.unwrap_err().code, GreqContentErrorCodes::EmptyContent);
     }
 
     #[test]
     fn test_only_request_line() {
         let contents = "GET /index.html HTTP/1.1";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -155,7 +199,7 @@ mod tests {
     #[test]
     fn test_request_with_headers() {
         let contents = "GET /index.html HTTP/1.1\r\nHost: localhost\r\nUser-Agent: curl";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -169,7 +213,7 @@ mod tests {
     #[test]
     fn test_request_with_content() {
         let contents = "GET /index.html HTTP/1.1\r\n\r\nThis is the body content";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -182,7 +226,7 @@ mod tests {
     #[test]
     fn test_request_with_headers_and_content() {
         let contents = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\nThis is the body content";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -195,7 +239,7 @@ mod tests {
     #[test]
     fn test_request_with_headers_and_double_empty_line_before_content() {
         let contents = "GET /index.html HTTP/1.1\r\nHost: localhost\r\n\r\n\r\nThis is the body content";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_ok());
 
         let greq = result.unwrap();
@@ -210,32 +254,32 @@ mod tests {
     #[test]
     fn test_request_with_malformed_header() {
         let contents = "GET /index.html HTTP/1.1\r\nMalformedHeaderWithoutColon";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Invalid header line: MalformedHeaderWithoutColon".to_string());
+        assert_eq!(result.unwrap_err().code, GreqContentErrorCodes::InvalidHeaderLine);
     }
 
     #[test]
     fn test_missing_method() {
         let contents = "/index.html HTTP/1.1";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Missing HTTP method".to_string());
+        assert_eq!(result.unwrap_err().code, GreqContentErrorCodes::MissingHttpMethod);
     }
 
     #[test]
     fn test_missing_uri() {
         let contents = "GET HTTP/1.1";
-        let result = GreqContent::from_string(contents);
+        let result = GreqContent::from_str(contents);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Missing URI".to_string());
+        assert_eq!(result.unwrap_err().code, GreqContentErrorCodes::MissingUri);
     }
 
     #[test]
     fn test_http_version() {
         // Case 1: With HTTP version explicitly provided
         let contents_with_version = "GET /index.html HTTP/2.0\r\nHost: localhost";
-        let result_with_version = GreqContent::from_string(contents_with_version);
+        let result_with_version = GreqContent::from_str(contents_with_version);
         assert!(result_with_version.is_ok());
 
         let greq_with_version = result_with_version.unwrap();
@@ -245,7 +289,7 @@ mod tests {
 
         // Case 2: Without HTTP version (should default to HTTP/1.1)
         let contents_without_version = "GET /index.html\r\nHost: localhost";
-        let result_without_version = GreqContent::from_string(contents_without_version);
+        let result_without_version = GreqContent::from_str(contents_without_version);
         assert!(result_without_version.is_ok());
 
         let greq_without_version = result_without_version.unwrap();

@@ -1,7 +1,8 @@
-use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use futures::future::err;
 use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
-use crate::greq_object::traits::from_string_trait::FromString;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
+use serde::{Deserialize, Serialize};
 
 /// The footer element containing all the test conditions
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -10,19 +11,58 @@ pub struct GreqFooter {
     pub conditions: Vec<GreqFooterCondition>,
 }
 
-impl FromString for GreqFooter {
-    fn from_string(contents: &str) -> Result<GreqFooter, String> {
+#[derive(Debug, PartialEq)]
+pub enum GreqFooterErrorCodes {
+    LineHasNoColonSign,
+    TheKeywordOrNotInTheBeginning,
+    TheKeywordNotAppearsMoreThanOnce,
+    InvalidHeaderKey,
+    InvalidKey
+}
+
+#[derive(Debug)]
+pub struct GreqFooterError {
+    pub code: GreqFooterErrorCodes,
+    pub message: String
+}
+
+impl GreqFooterErrorCodes {
+    pub fn error_message(&self) -> &'static str {
+        match self {
+            GreqFooterErrorCodes::LineHasNoColonSign => "The line does not contain a colon sign.",
+            GreqFooterErrorCodes::TheKeywordOrNotInTheBeginning => "The keyword OR is not at the beginning.",
+            GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce => "The keyword appears more than once.",
+            GreqFooterErrorCodes::InvalidHeaderKey => "The header key is invalid.",
+            GreqFooterErrorCodes::InvalidKey => "The key is invalid.",
+            _ => "Unrecognized footer error",
+        }
+    }
+}
+
+impl GreqFooterError {
+    pub fn new(code: GreqFooterErrorCodes, message: &str) -> Self {
+        Self { code, message: message.to_string() }
+    }
+
+    pub fn from_error_code(code: GreqFooterErrorCodes) -> Self {
+        let error_message = code.error_message();
+        Self::new(code, error_message)
+    }
+}
+
+impl FromStr for GreqFooter {
+    type Err = GreqFooterError;
+
+    fn from_str(contents: &str) -> Result<GreqFooter, Self::Err> {
         let mut conditions = Vec::new();
         let original_string = contents.to_string();
 
         for line in contents.lines() {
             let line = line.trim();
-            if line.is_empty() {
-                return Err("Empty lines are not allowed.".to_string());
-            }
 
-            if line.starts_with("--") {
-                continue; // Skip comments
+            // Skip comments and empty lines
+            if line.is_empty() || line.starts_with("--") {
+                continue;
             }
 
             // Validate and parse each line
@@ -40,7 +80,7 @@ impl FromString for GreqFooter {
 impl EnrichWith for GreqFooter {
     fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
     where
-        Self: Sized
+        Self: Sized,
     {
         // Merge conditions only if self.conditions is empty
         if self.conditions.is_empty() {
@@ -50,11 +90,10 @@ impl EnrichWith for GreqFooter {
         } else {
             // add conditions from "object_to_merge" that don't exist in self
             for condition in &object_to_merge.conditions {
-                let condition_exists = self.conditions
+                let condition_exists = self
+                    .conditions
                     .iter()
-                    .find(|existing_self_condition| {
-                        existing_self_condition.key == condition.key
-                    });
+                    .find(|existing_self_condition| existing_self_condition.key == condition.key);
 
                 // add the missing footer condition
                 if condition_exists.is_none() {
@@ -68,14 +107,14 @@ impl EnrichWith for GreqFooter {
 }
 
 impl GreqFooter {
-    fn parse_condition(line: &str) -> Result<GreqFooterCondition, String> {
+    fn parse_condition(line: &str) -> Result<GreqFooterCondition, GreqFooterError> {
         // Split the line on the first ":" to separate key and value
         let (key_part, value_part) = line.split_once(":").unwrap_or_default();
         if key_part.trim().is_empty() || value_part.is_empty() {
-            return Err("Every line must contain a ':' delimiter.".to_string());
+            return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::LineHasNoColonSign))
         }
 
-        // parts like "or" "not" "response-content" "regex", etc.
+        // parts consist of "or" "not" "response-content" "regex", etc.
         let key_parts: Vec<&str> = key_part.split_whitespace().collect();
 
         let mut condition_line: GreqFooterCondition = GreqFooterCondition {
@@ -85,77 +124,89 @@ impl GreqFooter {
 
         let mut i: i8 = 0;
         let mut errors: Vec<String> = Vec::new();
-        key_parts.iter().for_each(|key| {
+        key_parts.iter().try_for_each(|key| {
             // skip parsing on errors
             if !errors.is_empty() {
-                return;
+                return Ok(());
             }
 
             let lc_key = key.to_lowercase();
             match lc_key.as_str() {
                 // prefixes
                 "or" => {
-                    if i == 0 {
-                        condition_line.has_or = true;
-                    } else {
-                        errors.push(format!("The keyword 'or' must be in the beginning of the line in {}", key));
-                        return;
+                    if i != 0 {
+                        return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::TheKeywordOrNotInTheBeginning));
                     }
-                },
+
+                    condition_line.has_or = true;
+                }
                 "not" => {
                     if condition_line.has_not {
-                        errors.push("The keyword 'not' must be mentioned once".to_string());
-                        return;
+                        return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce));
                     }
 
                     condition_line.has_not = true;
-                },
+                }
 
                 // the key
-                "status-code" => { condition_line.key = "status-code".to_string(); },
-                "response-content" => { condition_line.key = "response-content".to_string(); },
+                "status-code" => {
+                    condition_line.key = "status-code".to_string();
+                }
+                "response-content" => {
+                    condition_line.key = "response-content".to_string();
+                }
 
                 // the operator
-                "equals" => { condition_line.operator = ConditionOperator::Equals; },
-                "contains" => { condition_line.operator = ConditionOperator::Contains; },
-                "starts-with" => { condition_line.operator = ConditionOperator::StartsWith; },
-                "ends-with" => { condition_line.operator = ConditionOperator::EndsWith; },
+                "equals" => {
+                    condition_line.operator = ConditionOperator::Equals;
+                }
+                "contains" => {
+                    condition_line.operator = ConditionOperator::Contains;
+                }
+                "starts-with" => {
+                    condition_line.operator = ConditionOperator::StartsWith;
+                }
+                "ends-with" => {
+                    condition_line.operator = ConditionOperator::EndsWith;
+                }
 
                 // the suffix
-                "regex" => { condition_line.is_regex = true; },
-                "case-sensitive" => { condition_line.is_case_sensitive = true; },
+                "regex" => {
+                    condition_line.is_regex = true;
+                }
+                "case-sensitive" => {
+                    condition_line.is_case_sensitive = true;
+                }
 
-                _ => {
-                    // check if the condition is on one of the headers
-                    if lc_key.starts_with("headers.") {
-                        if let Some((h_prefix, header_name)) = lc_key.split_once(".") {
-                            if header_name.trim().is_empty() || header_name.contains(".") {
-                                errors.push(format!("The header key is invalid in this line '{}'", line));
-                                return;
-                            }
-
-                            condition_line.key = header_name.to_string();
-                            return;
+                // check the headers condition (e.g. "headers.content-type: application/json")
+                key if key.starts_with("headers.") => {
+                    if let Some((h_prefix, header_name)) = key.split_once(".") {
+                        // not allowed to use "." in the header name. E.g. "headers.my.header"
+                        if header_name.trim().is_empty() || header_name.contains(".") {
+                            return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidHeaderKey));
                         }
-                    }
 
-                    errors.push(format!("invalid key in this line '{}'", line));
-                    return;
+                        condition_line.key = header_name.to_string();
+                    } else {
+                        // should not reach here
+                        return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidHeaderKey));
+                    }
+                }
+
+                // unknown key used
+                _ => {
+                    return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidKey));
                 }
             }
 
             i += 1;
-        });
-
-        if !errors.is_empty() {
-            return Err(errors.join(". "));
-        }
+            Ok(())
+        })?;
 
         // Create the condition
         Ok(condition_line)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -164,7 +215,7 @@ mod tests {
     #[test]
     fn test_valid_conditions() {
         let input = "status-code equals: 200\nresponse-content contains: \"some content\"\n";
-        let footer = GreqFooter::from_string(input).unwrap();
+        let footer = GreqFooter::from_str(input).unwrap();
         assert_eq!(footer.conditions.len(), 2);
         assert_eq!(footer.conditions[0].key, "status-code");
         assert_eq!(footer.conditions[0].operator, ConditionOperator::Equals);
@@ -178,40 +229,32 @@ mod tests {
     #[test]
     fn test_ignore_comments() {
         let input = "-- this is a comment\nstatus-code equals: 200\n";
-        let footer = GreqFooter::from_string(input).unwrap();
+        let footer = GreqFooter::from_str(input).unwrap();
         assert_eq!(footer.conditions.len(), 1);
-    }
-
-    #[test]
-    fn test_empty_lines() {
-        let input = "status-code equals: 200\n\nresponse-content contains: \"some content\"\n";
-        let result = GreqFooter::from_string(input);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Empty lines are not allowed.");
     }
 
     #[test]
     fn test_missing_colon() {
         let input = "status-code equals 200\nresponse-content contains: \"some content\"\n";
-        let result = GreqFooter::from_string(input);
+        let result = GreqFooter::from_str(input);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Every line must contain a ':' delimiter.");
+        assert_eq!(result.unwrap_err().code, GreqFooterErrorCodes::LineHasNoColonSign);
     }
 
     #[test]
     fn test_invalid_operator() {
         let input = "status-code invalid-operator: 200\n";
-        let result = GreqFooter::from_string(input);
+        let result = GreqFooter::from_str(input);
         assert!(result.is_err());
 
         let result_err = result.unwrap_err();
-        assert!(result_err.starts_with("invalid key in this line"));
+        assert_eq!(result_err.code, GreqFooterErrorCodes::InvalidKey);
     }
 
     #[test]
     fn test_conditions_with_prefixes() {
         let input = "not status-code equals: 200\nor response-content contains: \"some content\"\n";
-        let parse_result = GreqFooter::from_string(input);
+        let parse_result = GreqFooter::from_str(input);
         assert!(!parse_result.is_err());
 
         let footer = parse_result.unwrap();
@@ -223,9 +266,9 @@ mod tests {
     #[test]
     fn test_conditions_with_suffixes() {
         let input = "response-content ends-with case-sensitive: \"the end.\"\n";
-        let parse_result = GreqFooter::from_string(input);
+        let parse_result = GreqFooter::from_str(input);
         if let Err(err) = &parse_result {
-            println!("Parsing error: {}", err);
+            println!("Parsing error: {}", err.message);
         }
 
         assert!(!parse_result.is_err());
@@ -240,7 +283,7 @@ mod tests {
     #[test]
     fn test_conditions_with_regex() {
         let input = "response-content contains regex: \"some.*regex\"\n";
-        let footer = GreqFooter::from_string(input).unwrap();
+        let footer = GreqFooter::from_str(input).unwrap();
         assert_eq!(footer.conditions.len(), 1);
         assert!(footer.conditions[0].is_regex);
         assert_eq!(footer.conditions[0].value, "\"some.*regex\"");
@@ -249,7 +292,7 @@ mod tests {
     #[test]
     fn test_multiple_conditions() {
         let input = "status-code equals: 200\nor response-content contains: \"some content\"\nnot response-content starts-with: \"unwanted\"\n";
-        let footer = GreqFooter::from_string(input).unwrap();
+        let footer = GreqFooter::from_str(input).unwrap();
         assert_eq!(footer.conditions.len(), 3);
         assert_eq!(footer.conditions[2].key, "response-content");
         assert!(footer.conditions[2].has_not);
@@ -284,13 +327,11 @@ mod tests {
     #[test]
     fn test_enrich_with_non_empty_self_empty_merge() {
         let mut footer_self = GreqFooter {
-            conditions: vec![
-                GreqFooterCondition {
-                    key: "key1".to_string(),
-                    value: "value1".to_string(),
-                    ..Default::default()
-                },
-            ],
+            conditions: vec![GreqFooterCondition {
+                key: "key1".to_string(),
+                value: "value1".to_string(),
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let footer_to_merge = GreqFooter::default();
@@ -305,13 +346,11 @@ mod tests {
     #[test]
     fn test_enrich_with_non_empty_self_and_merge_no_duplicates() {
         let mut footer_self = GreqFooter {
-            conditions: vec![
-                GreqFooterCondition {
-                    key: "key1".to_string(),
-                    value: "value1".to_string(),
-                    ..Default::default()
-                },
-            ],
+            conditions: vec![GreqFooterCondition {
+                key: "key1".to_string(),
+                value: "value1".to_string(),
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let footer_to_merge = GreqFooter {
