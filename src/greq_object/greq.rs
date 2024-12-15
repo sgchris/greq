@@ -1,4 +1,4 @@
-use crate::greq_object::greq_content::{GreqContent, GreqContentErrorCodes};
+use crate::greq_object::greq_content::GreqContent;
 use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
 use crate::greq_object::greq_http_request::GreqHttpRequest;
@@ -13,9 +13,15 @@ use std::str::FromStr;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct SectionsDelimiter { value: char }
+impl Default for SectionsDelimiter { fn default() -> Self { SectionsDelimiter { value: '=' } } }
+
+
+
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Greq {
     file_contents: String,
-    sections_delimiter: Option<char>,
+    sections_delimiter: SectionsDelimiter,
     header: GreqHeader,
     content: GreqContent,
     footer: GreqFooter,
@@ -64,16 +70,6 @@ impl GreqError {
     }
 }
 
-// Implement the default to set the default delimiter
-impl Default for Greq {
-    fn default() -> Self {
-        Self {
-            sections_delimiter: Some('='),
-            ..Default::default()
-        }
-    }
-}
-
 impl FromStr for Greq {
     // define a type for the parsing errors
     type Err = GreqError;
@@ -88,17 +84,16 @@ impl FromStr for Greq {
         let mut sections: [Vec<&str>; 3] = [vec![], vec![], vec![]];
 
         // try to extract custom delimiter, if provided
-        let mut delimiter = greq.sections_delimiter.unwrap_or('=');
-        if let Some(delimiter_line) = lines.find(|line| line.to_lowercase().starts_with("delimiter:")) {
+        if let Some(delimiter_line) = lines.find(|line| line.to_lowercase().starts_with("delimiter")) {
             if let Some((_, value)) = delimiter_line.split_once(':') {
-                delimiter = value.trim().chars().next().unwrap_or('=');
+                greq.sections_delimiter.value = value.trim().chars().next().unwrap_or('=');
             }
         }
 
         let mut part_number: usize = 0;
         lines.try_for_each(|line| {
             // check for delimiter
-            if line.starts_with(&delimiter.to_string().repeat(4)) {
+            if line.starts_with(&greq.sections_delimiter.value.to_string().repeat(4)) {
                 part_number += 1;
             } else if part_number > 2 {
                 return Err(GreqError::from_error_code(GreqErrorCodes::TooManySections));

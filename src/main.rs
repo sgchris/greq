@@ -19,7 +19,7 @@ async fn main() -> std::io::Result<()> {
 
     let greq_parse_result = Greq::from_file(&args.input);
     if greq_parse_result.is_err() {
-        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, greq_parse_result.err().unwrap()));
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, greq_parse_result.err().unwrap().message));
     }
 
     let greq = greq_parse_result.unwrap();
@@ -51,7 +51,7 @@ async fn main() -> std::io::Result<()> {
     // execute greq object
     let results = greq.execute().await;
     if results.is_err() {
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, results.err().unwrap()));
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, results.err().unwrap().message));
     }
 
     let evaluation_success = results.unwrap().0;

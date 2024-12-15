@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use futures::future::err;
 use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use serde::{Deserialize, Serialize};
@@ -34,7 +33,6 @@ impl GreqFooterErrorCodes {
             GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce => "The keyword appears more than once.",
             GreqFooterErrorCodes::InvalidHeaderKey => "The header key is invalid.",
             GreqFooterErrorCodes::InvalidKey => "The key is invalid.",
-            _ => "Unrecognized footer error",
         }
     }
 }
@@ -123,14 +121,9 @@ impl GreqFooter {
         };
 
         let mut i: i8 = 0;
-        let mut errors: Vec<String> = Vec::new();
         key_parts.iter().try_for_each(|key| {
-            // skip parsing on errors
-            if !errors.is_empty() {
-                return Ok(());
-            }
-
             let lc_key = key.to_lowercase();
+
             match lc_key.as_str() {
                 // prefixes
                 "or" => {

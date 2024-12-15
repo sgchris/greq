@@ -173,7 +173,6 @@ impl GreqContent {
 #[cfg(test)]
 #[cfg(test)]
 mod tests {
-    use crate::greq_object::greq_header::GreqHeaderErrorCodes;
     use super::*;
 
     #[test]

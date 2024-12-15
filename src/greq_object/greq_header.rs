@@ -1,12 +1,16 @@
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
-use crate::greq_object::greq_footer::GreqFooterErrorCodes;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct GreqHeader {
     pub original_string: String,
-    pub delimiter: char, // the delimiter character to separate sections. Default '='
+
+    // the delimiter character to separate sections. Default '='.
+    // The delimiter is handled by the main Greq object. Here it's
+    // defined to avoid 'unknown header' error.
+    // Probably there's a better way to handle this.
+    pub delimiter: char,
 
     pub project: String,          // the name of the project. Will be implemented.
     pub output_folder: String,    // path to a destination folder. Default current.
@@ -21,15 +25,6 @@ pub struct GreqHeader {
     pub base_request: Option<String>,
     // get_response that request before executing this one
     pub depends_on: Option<String>,
-}
-
-impl Default for GreqHeader {
-    fn default() -> Self {
-        Self {
-            delimiter: '=',
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -49,7 +44,6 @@ impl GreqHeaderErrorCodes {
         match self {
             GreqHeaderErrorCodes::UnknownHeader => "Unknown header.",
             GreqHeaderErrorCodes::LineHasNoColonSign => "The line does not contain a colon sign.",
-            _ => "Unrecognized header error",
         }
     }
 }
