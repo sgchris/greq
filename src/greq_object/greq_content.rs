@@ -77,7 +77,7 @@ impl FromStr for GreqContent {
 
         // Parse the HTTP version
         let http_version = request_parts.next().unwrap_or("HTTP/1.1").to_string();
-        if Self::is_valid_http_version(&http_version) {
+        if !Self::is_valid_http_version(&http_version) {
             return Err(GreqContentError::from_error_code(GreqContentErrorCodes::InvalidHttpVersion));
         }
 
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_missing_uri() {
-        let contents = "GET HTTP/1.1";
+        let contents = "GET";
         let result = GreqContent::from_str(contents);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code, GreqContentErrorCodes::MissingUri);

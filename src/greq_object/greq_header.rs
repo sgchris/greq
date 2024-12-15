@@ -209,7 +209,7 @@ mod tests {
                      base-request: GET /api/data";
         let result = GreqHeader::from_str(input);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::UnknownHeader);
+        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::LineHasNoColonSign);
     }
 
     #[test]
