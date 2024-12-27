@@ -32,7 +32,6 @@ pub struct Greq {
 pub enum GreqErrorCodes {
     TooFewSections,
     TooManySections,
-    MissingSections,
     SeparatorNotSet,
 
     ParsingHeaderSectionFailed,
@@ -82,22 +81,27 @@ impl FromStr for Greq {
 
         let mut lines = s.lines();
         let mut sections: [Vec<&str>; 3] = [vec![], vec![], vec![]];
+        let num1 = lines.clone().count();
 
         // try to extract custom delimiter, if provided
-        if let Some(delimiter_line) = lines.find(|line| line.to_lowercase().starts_with("delimiter")) {
+        if let Some(delimiter_line) = lines.clone().find(|line| line.to_lowercase().starts_with("delimiter")) {
             if let Some((_, value)) = delimiter_line.split_once(':') {
                 greq.sections_delimiter.value = value.trim().chars().next().unwrap_or('=');
             }
         }
 
+        let delimiter_start = greq.sections_delimiter.value.to_string().repeat(4);
+
+        let num2 = lines.clone().count();
         let mut part_number: usize = 0;
-        lines.try_for_each(|line| {
+        lines.try_for_each(|line| -> Result<(), Self::Err> {
             // check for delimiter
-            if line.starts_with(&greq.sections_delimiter.value.to_string().repeat(4)) {
+            if line.starts_with(&delimiter_start) {
                 part_number += 1;
-            } else if part_number > 2 {
-                return Err(GreqError::from_error_code(GreqErrorCodes::TooManySections));
-            } else {
+                if part_number > 2 {
+                    return Err(GreqError::from_error_code(GreqErrorCodes::TooManySections));
+                }
+            } else if part_number <= 2 {
                 sections[part_number].push(line);
             }
 
@@ -310,7 +314,7 @@ host: greq-test.example.com"#; // Missing footer section
             parse_result.is_err(),
             "Missing sections should cause an error"
         );
-        assert_eq!(parse_result.unwrap_err().code, GreqErrorCodes::MissingSections);
+        assert_eq!(parse_result.unwrap_err().code, GreqErrorCodes::TooFewSections);
     }
 
     #[test]
