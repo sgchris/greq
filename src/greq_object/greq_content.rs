@@ -149,6 +149,32 @@ impl EnrichWith for GreqContent {
     where
         Self: Sized
     {
+        // If self is empty, copy everything from object_to_merge
+        if self.original_string.is_empty() {
+            self.original_string = object_to_merge.original_string.clone();
+            self.http_request = object_to_merge.http_request.clone();
+            return Ok(());
+        }
+
+        // Merge HTTP request
+        self.http_request.enrich_with(&object_to_merge.http_request)?;
+
+        // Update original string to reflect the merged state
+        self.original_string = format!(
+            "{} {}\r\n{}\r\n{}",
+            self.http_request.method,
+            self.http_request.uri,
+            self.http_request.headers.iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect::<Vec<_>>()
+                .join("\r\n"),
+            if !self.http_request.content.is_empty() {
+                format!("\r\n{}", self.http_request.content)
+            } else {
+                String::new()
+            }
+        );
+
         Ok(())
     }
 }
