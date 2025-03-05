@@ -173,7 +173,7 @@ impl GreqFooter {
 
                 // check the headers condition (e.g. "headers.content-type: application/json")
                 key if key.starts_with("headers.") => {
-                    if let Some((h_prefix, header_name)) = key.split_once(".") {
+                    if let Some((_h_prefix, header_name)) = key.split_once(".") {
                         // not allowed to use "." in the header name. E.g. "headers.my.header"
                         if header_name.trim().is_empty() || header_name.contains(".") {
                             return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidHeaderKey));

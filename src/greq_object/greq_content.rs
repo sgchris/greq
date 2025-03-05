@@ -145,9 +145,9 @@ impl FromStr for GreqContent {
 }
 
 impl EnrichWith for GreqContent {
-    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+    fn enrich_with(&mut self, _object_to_merge: &Self) -> Result<(), String>
     where
-        Self: Sized
+        Self: Sized,
     {
         // If self is empty, copy everything from object_to_merge
         if self.original_string.is_empty() {

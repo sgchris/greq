@@ -16,15 +16,13 @@ use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 pub struct SectionsDelimiter { value: char }
 impl Default for SectionsDelimiter { fn default() -> Self { SectionsDelimiter { value: '=' } } }
 
-
-
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Greq {
-    file_contents: String,
-    sections_delimiter: SectionsDelimiter,
-    header: GreqHeader,
-    content: GreqContent,
-    footer: GreqFooter,
+    pub file_contents: String,
+    pub sections_delimiter: SectionsDelimiter,
+    pub header: GreqHeader,
+    pub content: GreqContent,
+    pub footer: GreqFooter,
 }
 
 // possible Greq parsing errors
@@ -81,7 +79,7 @@ impl FromStr for Greq {
 
         let mut lines = s.lines();
         let mut sections: [Vec<&str>; 3] = [vec![], vec![], vec![]];
-        let num1 = lines.clone().count();
+        let _num1 = lines.clone().count();
 
         // try to extract custom delimiter, if provided
         if let Some(delimiter_line) = lines.clone().find(|line| line.to_lowercase().starts_with("delimiter")) {
@@ -92,7 +90,7 @@ impl FromStr for Greq {
 
         let delimiter_start = greq.sections_delimiter.value.to_string().repeat(4);
 
-        let num2 = lines.clone().count();
+        let _num2 = lines.clone().count();
         let mut part_number: usize = 0;
         lines.try_for_each(|line| -> Result<(), Self::Err> {
             // check for delimiter
@@ -114,19 +112,19 @@ impl FromStr for Greq {
 
         print!("parsing header...");
         greq.header = GreqHeader::from_str(&sections[0].join("\r\n"))
-            .map_err(|e| GreqError::from_error_code(GreqErrorCodes::ParsingHeaderSectionFailed))?;
+            .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingHeaderSectionFailed))?;
         println!("done");
 
         print!("parsing content...");
         greq.content = GreqContent::from_str(&sections[1].join("\r\n"))
-            .map_err(|e| GreqError::from_error_code(GreqErrorCodes::ParsingContentSectionFailed))?;
+            .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingContentSectionFailed))?;
         // set the default protocol to https
         greq.content.http_request.is_http = greq.header.is_http.unwrap_or(false);
         println!("done");
 
         print!("parsing footer...");
         greq.footer = GreqFooter::from_str(&sections[2].join("\r\n"))
-            .map_err(|e| GreqError::from_error_code(GreqErrorCodes::ParsingFooterSectionFailed))?;
+            .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingFooterSectionFailed))?;
         println!("done");
 
         Ok(greq)
@@ -266,168 +264,16 @@ impl Greq {
     fn evaluate(&self) -> Result<bool, String> {
         Ok(true)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_valid_input() {
-        let input = r#"output-folder: /path/to/output/folder
-project: greq test
-====
-GET /some-url
-host: greq-test.example.com
-====
-status-code: 200
-response-content contains: greq test result"#;
-
-        let parse_result = Greq::from_str(input);
-        assert!(parse_result.is_ok(), "Valid input should succeed");
-        let greq = parse_result.unwrap();
-
-        assert_eq!(
-            greq.header.original_string,
-            "output-folder: /path/to/output/folder\r\nproject: greq test"
-        );
-        assert_eq!(
-            greq.content.original_string,
-            "GET /some-url\r\nhost: greq-test.example.com"
-        );
-        assert_eq!(
-            greq.footer.original_string,
-            "status-code: 200\r\nresponse-content contains: greq test result"
-        );
+    pub fn header(&self) -> &GreqHeader {
+        &self.header
     }
 
-    #[test]
-    fn test_missing_sections() {
-        let input = r#"output-folder: /path/to/output/folder
-project: greq test
-====
-GET /some-url
-host: greq-test.example.com"#; // Missing footer section
-
-        let parse_result = Greq::from_str(input);
-        assert!(
-            parse_result.is_err(),
-            "Missing sections should cause an error"
-        );
-        assert_eq!(parse_result.unwrap_err().code, GreqErrorCodes::TooFewSections);
+    pub fn content(&self) -> &GreqContent {
+        &self.content
     }
 
-    #[test]
-    fn test_extra_sections() {
-        let input = r#"output-folder: /path/to/output/folder
-project: greq test
-====
-GET /some-url
-host: greq-test.example.com
-====
-status-code: 200
-response-content contains: greq test result
-====
-Extra section line"#; // More than 3 sections
-
-        let parse_result = Greq::from_str(input);
-        assert!(
-            parse_result.is_err(),
-            "More than 3 sections should cause an error"
-        );
-        assert_eq!(parse_result.unwrap_err().code, GreqErrorCodes::TooManySections);
-    }
-
-    #[test]
-    fn test_empty_input() {
-        let input = "";
-
-        let parse_result = Greq::from_str(input);
-        assert!(parse_result.is_err(), "Empty input should cause an error");
-        assert_eq!(parse_result.unwrap_err().code, GreqErrorCodes::TooFewSections);
-    }
-
-    #[test]
-    fn test_header_parse_error() {
-        // Assume GreqHeader has custom parsing logic that can fail
-        let input = r#"Invalid header format
-====
-GET /some-url
-host: greq-test.example.com
-====
-status-code: 200
-response-content contains: greq test result"#;
-
-        // Mocking GreqHeader to return an error in this case
-        let parse_result = Greq::from_str(input);
-        assert!(
-            parse_result.is_err(),
-            "Header parse error should be propagated"
-        );
-    }
-
-    #[test]
-    fn test_content_parse_error() {
-        // Assume GreqContent has custom parsing logic that can fail
-        let input = r#"output-folder: /path/to/output/folder
-project: greq test
-====
-Invalid content format
-====
-status-code: 200
-response-content contains: greq test result"#;
-
-        // Mocking GreqContent to return an error in this case
-        let parse_result = Greq::from_str(input);
-        assert!(
-            parse_result.is_err(),
-            "Content parse error should be propagated"
-        );
-    }
-
-    #[test]
-    fn test_footer_parse_error() {
-        // Assume GreqFooter has custom parsing logic that can fail
-        let input = r#"output-folder: /path/to/output/folder
-project: greq test
-====
-GET /some-url
-host: greq-test.example.com
-====
-Invalid footer format"#;
-
-        // Mocking GreqFooter to return an error in this case
-        let parse_result = Greq::from_str(input);
-        assert!(
-            parse_result.is_err(),
-            "Footer parse error should be propagated"
-        );
-    }
-
-    #[test]
-    fn test_section_delimiter_handling() {
-        let input = r#"output-folder: /path/to/output/folder
-====
-GET /some-url
-====
-status-code: 200
-response-content contains: greq test result"#; // No header content, but valid delimiters
-
-        let parse_result = Greq::from_str(input);
-        assert!(
-            parse_result.is_ok(),
-            "Valid delimiters but no content should still be okay"
-        );
-        let greq = parse_result.unwrap();
-
-        assert_eq!(
-            greq.header.original_string,
-            "output-folder: /path/to/output/folder"
-        ); // Header is empty
-        assert_eq!(greq.content.original_string, "GET /some-url"); // Content is valid
-        assert_eq!(
-            greq.footer.original_string,
-            "status-code: 200\r\nresponse-content contains: greq test result"
-        ); // Footer is valid
+    pub fn footer(&self) -> &GreqFooter {
+        &self.footer
     }
 }
