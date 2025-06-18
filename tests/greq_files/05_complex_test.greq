@@ -1,0 +1,21 @@
+-- Complex test file combining multiple conditions
+-- This test verifies a DELETE request to /api/resources
+-- Expected: Status code 204, no content, and specific headers
+project: test-project
+output-folder: ./test-output
+is-http: true
+====
+
+DELETE /api/resources/123
+Host: api.example.com
+Authorization: Bearer token123
+Accept: application/json
+
+====
+
+-- Test conditions
+status-code equals: 204
+headers.content-length equals: 0
+not response-content contains: "error"
+or headers.etag contains: "W/"
+or headers.last-modified contains: "GMT" 

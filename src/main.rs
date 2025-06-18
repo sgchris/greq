@@ -1,34 +1,38 @@
 #![allow(dead_code)] // Disable warnings about dead code globally
 #![allow(unused_variables)] // Disable warnings about unused variables globally
 
-use clap::Parser;
-use crate::cli_parameters::CliParameters;
-use crate::greq_object::greq::Greq;
-
+mod constants;
+mod cli;
 mod greq_object;
 
-mod cli_parameters;
+use clap::Parser;
+use cli::CliParameters;
+use greq_object::greq::Greq;
+
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let args = CliParameters::parse();
+
+    // Parse command line arguments
+    let args: CliParameters = CliParameters::parse();
     if let Err(validation_error) = args.validate() {
         println!("{}", validation_error);
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, validation_error));
     }
 
-    let greq_parse_result = Greq::from_file(&args.input);
-    if greq_parse_result.is_err() {
-        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, greq_parse_result.err().unwrap().message));
-    }
+    // Initialize Greq from the input file
+    // Parse the file and load the base requests
+    let first_input_file = args.input_files.first().unwrap();
+    let greq = Greq::from_file(&first_input_file)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e.message))?;
 
-    let greq = greq_parse_result.unwrap();
-    if args.show_parse_result {
-        let greq_as_json = serde_json::to_string_pretty(&greq).unwrap();
+    if args.display_request_only {
+        let greq_as_json = serde_json::to_string_pretty(&greq).unwrap_or(String::from("{}"));
         println!("Parse result:\r\n{}", greq_as_json);
+        return Ok(());
     }
 
-    if args.request_only {
+    if args.skip_evaluation {
         // get only the response
         let response = greq.get_response().await;
         if response.is_ok() {

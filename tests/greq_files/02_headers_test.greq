@@ -1,0 +1,23 @@
+-- Test file for header validation and case sensitivity
+-- This test verifies a POST request to /api/users
+-- Expected: Content-Type header is application/json and response starts with "Success"
+project: test-project
+output-folder: ./test-output
+is-http: true
+====
+
+POST /api/users
+Host: api.example.com
+Content-Type: application/json
+Accept: application/json
+
+{
+    "name": "John Doe",
+    "email": "john@example.com"
+}
+
+====
+
+-- Test conditions
+headers.content-type equals: application/json
+response-content starts-with case-sensitive: "Success" 

@@ -3,14 +3,16 @@ use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
 use crate::greq_object::greq_http_request::GreqHttpRequest;
 use crate::greq_object::greq_response::GreqResponse;
+use crate::greq_object::greq_footer_condition::ConditionOperator;
+use crate::greq_object::greq_parser::*;
 use futures::future::BoxFuture;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{self, Read};
-use std::path::Path;
 use std::str::FromStr;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
+use regex;
+use std::fs;
+
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SectionsDelimiter { value: char }
@@ -72,43 +74,20 @@ impl FromStr for Greq {
     type Err = GreqError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // initialize a new Greq object with the original file contents
         let mut greq = Greq {
             file_contents: s.to_string(),
             ..Default::default()
         };
 
-        let mut lines = s.lines();
-        let mut sections: [Vec<&str>; 3] = [vec![], vec![], vec![]];
-        let _num1 = lines.clone().count();
+        // check if a custom delimiter was defined
+        let delimiter_char = extract_delimiter(s);
+        greq.sections_delimiter.value = delimiter_char;
 
-        // try to extract custom delimiter, if provided
-        if let Some(delimiter_line) = lines.clone().find(|line| line.to_lowercase().starts_with("delimiter")) {
-            if let Some((_, value)) = delimiter_line.split_once(':') {
-                greq.sections_delimiter.value = value.trim().chars().next().unwrap_or('=');
-            }
-        }
-
-        let delimiter_start = greq.sections_delimiter.value.to_string().repeat(4);
-
-        let _num2 = lines.clone().count();
-        let mut part_number: usize = 0;
-        lines.try_for_each(|line| -> Result<(), Self::Err> {
-            // check for delimiter
-            if line.starts_with(&delimiter_start) {
-                part_number += 1;
-                if part_number > 2 {
-                    return Err(GreqError::from_error_code(GreqErrorCodes::TooManySections));
-                }
-            } else if part_number <= 2 {
-                sections[part_number].push(line);
-            }
-
-            Ok(())
-        })?;
-
-        if part_number != 2 {
-            return Err(GreqError::from_error_code(GreqErrorCodes::TooFewSections));
-        }
+        // greq file must have 3 sections. 
+        // the header (metadata), content (http raw request), and footer (the evaluation conditions)
+        let sections = parse_sections(s, greq.sections_delimiter.value)
+            .map_err(|e| GreqError::from_error_code(e))?;
 
         print!("parsing header...");
         greq.header = GreqHeader::from_str(&sections[0].join("\r\n"))
@@ -162,8 +141,15 @@ impl Greq {
             GreqError::new(GreqErrorCodes::HttpError, &e)
         })?;
 
-        let evaluation_result = self.evaluate().unwrap_or(false);
-        Ok((Some(evaluation_result), result.body.unwrap()))
+        let evaluation_result = match self.evaluate().await {
+            Ok(res) => Some(res),
+            Err(e) => {
+                println!("Error evaluating conditions: {}", e);
+                return Err(GreqError::new(GreqErrorCodes::HttpError, &e));
+            }
+        };
+
+        Ok((evaluation_result, result.body.unwrap()))
     }
 
     pub async fn get_response(&self) -> Result<GreqResponse, String> {
@@ -227,18 +213,21 @@ impl Greq {
         })
     }
 
+    // Load a Greq object from a file
     pub fn from_file(file_path: &str) -> Result<Greq, GreqError> {
-        let read_file_result = Self::read_file_to_string(file_path);
-        if read_file_result.is_err() {
-            let err_message = read_file_result.err().unwrap().to_string();
-            return Err(GreqError::new(GreqErrorCodes::ReadGreqFileError, &err_message));
-        }
+        let file_contents = fs::read_to_string(file_path).map_err(|e| {
+            GreqError::new(GreqErrorCodes::ReadGreqFileError, &format!("Failed to read file {}: {}", file_path, e))
+        })?;
 
-        let mut greq = Greq::from_str(read_file_result.unwrap().as_str())?;
+        // parse the file contents into a Greq object
+        let mut greq = Greq::from_str(&file_contents)?;
 
-        // TODO: avoid dependency loop
+        // load the base request if specified
+        // "ref" is used to avoid cloning the string unnecessarily
         if let Some(ref base_request_path) = greq.header.base_request {
             let base_greq = Greq::from_file(base_request_path)?;
+
+            // merge the base request into the current request
             greq.enrich_with(&base_greq).map_err(|e| GreqError::new(GreqErrorCodes::EnrichmentFailed, &e))?;
         }
 
@@ -254,15 +243,122 @@ impl Greq {
         Ok(&self.content.http_request)
     }
 
-    fn read_file_to_string<P: AsRef<Path>>(file_path: P) -> io::Result<String> {
-        let mut file = File::open(file_path)?; // Open the file
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)?; // Read the file contents into the string
-        Ok(contents) // Return the contents as a result
-    }
+    async fn evaluate(&self) -> Result<bool, String> {
+        let mut result = true;
+        let mut current_or_group = Vec::new();
+        let mut current_or_result = false;
+        let response = self.get_response().await?;
+        let status_code = response.status_code;
+        let response_body_owned = response.body.clone().unwrap_or_else(String::new);
+        let response_body = &response_body_owned;
+        let headers = &response.headers;
 
-    fn evaluate(&self) -> Result<bool, String> {
-        Ok(true)
+        for condition in &self.footer.conditions {
+            let condition_result = match condition.key.as_str() {
+                "status-code" => {
+                    let expected = condition.value.parse::<u16>().map_err(|e| format!("Invalid status code: {}", e))?;
+                    match condition.operator {
+                        ConditionOperator::Equals => status_code == expected,
+                        _ => return Err("Only equals operator is supported for status-code".to_string()),
+                    }
+                }
+                "response-content" => {
+                    let expected = condition.value.trim_matches('"');
+                    match condition.operator {
+                        ConditionOperator::Equals => response_body == expected,
+                        ConditionOperator::Contains => {
+                            if condition.is_regex {
+                                let re = regex::Regex::new(expected).map_err(|e| format!("Invalid regex: {}", e))?;
+                                re.is_match(response_body)
+                            } else {
+                                if condition.is_case_sensitive {
+                                    response_body.contains(expected)
+                                } else {
+                                    response_body.to_lowercase().contains(&expected.to_lowercase())
+                                }
+                            }
+                        }
+                        ConditionOperator::StartsWith => {
+                            if condition.is_case_sensitive {
+                                response_body.starts_with(expected)
+                            } else {
+                                response_body.to_lowercase().starts_with(&expected.to_lowercase())
+                            }
+                        }
+                        ConditionOperator::EndsWith => {
+                            if condition.is_case_sensitive {
+                                response_body.ends_with(expected)
+                            } else {
+                                response_body.to_lowercase().ends_with(&expected.to_lowercase())
+                            }
+                        }
+                    }
+                }
+                header_name => {
+                    let header_value = headers.get(header_name).map(|v| v.as_str()).unwrap_or("");
+                    let expected = condition.value.trim_matches('"');
+                    match condition.operator {
+                        ConditionOperator::Equals => header_value == expected,
+                        ConditionOperator::Contains => {
+                            if condition.is_regex {
+                                let re = regex::Regex::new(expected).map_err(|e| format!("Invalid regex: {}", e))?;
+                                re.is_match(header_value)
+                            } else {
+                                if condition.is_case_sensitive {
+                                    header_value.contains(expected)
+                                } else {
+                                    header_value.to_lowercase().contains(&expected.to_lowercase())
+                                }
+                            }
+                        }
+                        ConditionOperator::StartsWith => {
+                            if condition.is_case_sensitive {
+                                header_value.starts_with(expected)
+                            } else {
+                                header_value.to_lowercase().starts_with(&expected.to_lowercase())
+                            }
+                        }
+                        ConditionOperator::EndsWith => {
+                            if condition.is_case_sensitive {
+                                header_value.ends_with(expected)
+                            } else {
+                                header_value.to_lowercase().ends_with(&expected.to_lowercase())
+                            }
+                        }
+                    }
+                }
+            };
+
+            let final_result = if condition.has_not {
+                !condition_result
+            } else {
+                condition_result
+            };
+
+            if condition.has_or {
+                current_or_group.push(final_result);
+            } else {
+                if !current_or_group.is_empty() {
+                    current_or_result = current_or_group.iter().any(|&x| x);
+                    current_or_group.clear();
+                }
+                if !current_or_result {
+                    result = false;
+                    break;
+                }
+                result &= final_result;
+            }
+        }
+
+        // Handle any remaining OR conditions
+        if !current_or_group.is_empty() {
+            current_or_result = current_or_group.iter().any(|&x| x);
+            if !current_or_result {
+                result = false;
+            }
+        }
+
+        Ok(result)
     }
 
     pub fn header(&self) -> &GreqHeader {

@@ -1,7 +1,7 @@
-use std::str::FromStr;
 use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 /// The footer element containing all the test conditions
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -16,21 +16,25 @@ pub enum GreqFooterErrorCodes {
     TheKeywordOrNotInTheBeginning,
     TheKeywordNotAppearsMoreThanOnce,
     InvalidHeaderKey,
-    InvalidKey
+    InvalidKey,
 }
 
 #[derive(Debug)]
 pub struct GreqFooterError {
     pub code: GreqFooterErrorCodes,
-    pub message: String
+    pub message: String,
 }
 
 impl GreqFooterErrorCodes {
     pub fn error_message(&self) -> &'static str {
         match self {
             GreqFooterErrorCodes::LineHasNoColonSign => "The line does not contain a colon sign.",
-            GreqFooterErrorCodes::TheKeywordOrNotInTheBeginning => "The keyword OR is not at the beginning.",
-            GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce => "The keyword appears more than once.",
+            GreqFooterErrorCodes::TheKeywordOrNotInTheBeginning => {
+                "The keyword OR is not at the beginning."
+            }
+            GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce => {
+                "The keyword appears more than once."
+            }
             GreqFooterErrorCodes::InvalidHeaderKey => "The header key is invalid.",
             GreqFooterErrorCodes::InvalidKey => "The key is invalid.",
         }
@@ -39,7 +43,10 @@ impl GreqFooterErrorCodes {
 
 impl GreqFooterError {
     pub fn new(code: GreqFooterErrorCodes, message: &str) -> Self {
-        Self { code, message: message.to_string() }
+        Self {
+            code,
+            message: message.to_string(),
+        }
     }
 
     pub fn from_error_code(code: GreqFooterErrorCodes) -> Self {
@@ -109,7 +116,9 @@ impl GreqFooter {
         // Split the line on the first ":" to separate key and value
         let (key_part, value_part) = line.split_once(":").unwrap_or_default();
         if key_part.trim().is_empty() || value_part.is_empty() {
-            return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::LineHasNoColonSign))
+            return Err(GreqFooterError::from_error_code(
+                GreqFooterErrorCodes::LineHasNoColonSign,
+            ));
         }
 
         // parts consist of "or" "not" "response-content" "regex", etc.
@@ -128,14 +137,18 @@ impl GreqFooter {
                 // prefixes
                 "or" => {
                     if i != 0 {
-                        return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::TheKeywordOrNotInTheBeginning));
+                        return Err(GreqFooterError::from_error_code(
+                            GreqFooterErrorCodes::TheKeywordOrNotInTheBeginning,
+                        ));
                     }
 
                     condition_line.has_or = true;
                 }
                 "not" => {
                     if condition_line.has_not {
-                        return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce));
+                        return Err(GreqFooterError::from_error_code(
+                            GreqFooterErrorCodes::TheKeywordNotAppearsMoreThanOnce,
+                        ));
                     }
 
                     condition_line.has_not = true;
@@ -176,19 +189,25 @@ impl GreqFooter {
                     if let Some((_h_prefix, header_name)) = key.split_once(".") {
                         // not allowed to use "." in the header name. E.g. "headers.my.header"
                         if header_name.trim().is_empty() || header_name.contains(".") {
-                            return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidHeaderKey));
+                            return Err(GreqFooterError::from_error_code(
+                                GreqFooterErrorCodes::InvalidHeaderKey,
+                            ));
                         }
 
                         condition_line.key = header_name.to_string();
                     } else {
                         // should not reach here
-                        return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidHeaderKey));
+                        return Err(GreqFooterError::from_error_code(
+                            GreqFooterErrorCodes::InvalidHeaderKey,
+                        ));
                     }
                 }
 
                 // unknown key used
                 _ => {
-                    return Err(GreqFooterError::from_error_code(GreqFooterErrorCodes::InvalidKey));
+                    return Err(GreqFooterError::from_error_code(
+                        GreqFooterErrorCodes::InvalidKey,
+                    ));
                 }
             }
 
@@ -231,7 +250,10 @@ mod tests {
         let input = "status-code equals 200\nresponse-content contains: \"some content\"\n";
         let result = GreqFooter::from_str(input);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().code, GreqFooterErrorCodes::LineHasNoColonSign);
+        assert_eq!(
+            result.unwrap_err().code,
+            GreqFooterErrorCodes::LineHasNoColonSign
+        );
     }
 
     #[test]
