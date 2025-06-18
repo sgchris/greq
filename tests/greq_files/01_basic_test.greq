@@ -1,0 +1,17 @@
+-- Basic test file with status code and content checks
+-- This test verifies a simple GET request to /api/health
+-- Expected: Status code 200 and response contains "healthy"
+project: test-project
+output-folder: ./test-output
+is-http: true
+====
+
+GET /api/health
+Host: api.example.com
+Accept: application/json
+
+====
+
+-- Test conditions
+status-code equals: 200
+response-content contains: "healthy" 

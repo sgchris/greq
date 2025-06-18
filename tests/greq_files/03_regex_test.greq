@@ -1,0 +1,18 @@
+-- Test file for regex patterns and negative conditions
+-- This test verifies a GET request to /api/search
+-- Expected: Response contains a valid UUID and does not contain error messages
+project: test-project
+output-folder: ./test-output
+is-http: true
+====
+
+GET /api/search?q=test
+Host: api.example.com
+Accept: application/json
+
+====
+
+-- Test conditions
+response-content contains regex: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+not response-content contains: "error"
+not response-content contains: "exception" 
