@@ -145,7 +145,7 @@ impl FromStr for GreqContent {
 }
 
 impl EnrichWith for GreqContent {
-    fn enrich_with(&mut self, _object_to_merge: &Self) -> Result<(), String>
+    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
     where
         Self: Sized,
     {
