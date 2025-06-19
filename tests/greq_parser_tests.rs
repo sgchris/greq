@@ -6,44 +6,44 @@ use greq::greq_object::greq_parser::{extract_delimiter, parse_sections};
 #[test]
 fn test_extract_delimiter_valid_cases() {
     // Test with valid delimiter specification
-    assert_eq!(extract_delimiter("delimiter: #"), '#');
-    assert_eq!(extract_delimiter("Delimiter: @"), '@');
-    assert_eq!(extract_delimiter("DELIMITER: *"), '*');
+    assert_eq!(extract_delimiter("delimiter: #"), Some('#'));
+    assert_eq!(extract_delimiter("Delimiter: @"), Some('@'));
+    assert_eq!(extract_delimiter("DELIMITER: *"), Some('*'));
 
     // Test with whitespace around delimiter
-    assert_eq!(extract_delimiter("delimiter:   #   "), '#');
-    assert_eq!(extract_delimiter("delimiter:\t@\t"), '@');
+    assert_eq!(extract_delimiter("delimiter:   #   "), Some('#'));
+    assert_eq!(extract_delimiter("delimiter:\t@\t"), Some('@'));
 
     // Test with delimiter in middle of content
     let content = "some content\ndelimiter: %\nmore content";
-    assert_eq!(extract_delimiter(content), '%');
+    assert_eq!(extract_delimiter(content), Some('%'));
 }
 
 #[test]
 fn test_extract_delimiter_edge_cases() {
     // Test with no delimiter specification
-    assert_eq!(extract_delimiter("no delimiter here"), DEFAULT_DELIMITER_CHAR);
-    assert_eq!(extract_delimiter(""), DEFAULT_DELIMITER_CHAR);
+    assert_eq!(extract_delimiter("no delimiter here"), None);
+    assert_eq!(extract_delimiter(""), None);
 
     // Test with empty value after colon
-    assert_eq!(extract_delimiter("delimiter:"), DEFAULT_DELIMITER_CHAR);
-    assert_eq!(extract_delimiter("delimiter:   "), DEFAULT_DELIMITER_CHAR);
+    assert_eq!(extract_delimiter("delimiter:"), None);
+    assert_eq!(extract_delimiter("delimiter:   "), None);
 
     // Test with no colon
-    assert_eq!(extract_delimiter("delimiter"), DEFAULT_DELIMITER_CHAR);
+    assert_eq!(extract_delimiter("delimiter"), None);
 
     // Test with multiple delimiters (should take first)
-    assert_eq!(extract_delimiter("delimiter: #@"), '#');
+    assert_eq!(extract_delimiter("delimiter: #@"), Some('#'));
 
     // Test case insensitive matching
-    assert_eq!(extract_delimiter("dElImItEr: ^"), '^');
+    assert_eq!(extract_delimiter("dElImItEr: ^"), Some('^'));
 
     // Test with delimiter not at start of line
-    assert_eq!(extract_delimiter("  delimiter: &"), DEFAULT_DELIMITER_CHAR);
+    assert_eq!(extract_delimiter("  delimiter: &"), None);
 
     // Test with multiple delimiter lines (should take first)
     let content = "delimiter: #\ndelimiter: @";
-    assert_eq!(extract_delimiter(content), '#');
+    assert_eq!(extract_delimiter(content), Some('#'));
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn test_integration_extract_and_parse() {
         "@".repeat(DELIMITER_MIN_LENGTH)
     );
 
-    let delimiter = extract_delimiter(&content);
+    let delimiter = extract_delimiter(&content).unwrap_or(DEFAULT_DELIMITER_CHAR);
     let result = parse_sections(&content, delimiter).unwrap();
 
     assert_eq!(result[0], vec!["delimiter: @", "first section"]);

@@ -1,5 +1,5 @@
 
-use crate::constants::{DEFAULT_DELIMITER_CHAR, DELIMITER_MIN_LENGTH};
+use crate::constants::{DELIMITER_MIN_LENGTH};
 use crate::greq_object::greq::GreqErrorCodes;
 
 // Parse the content of a GREQ file into sections based on a delimiter.
