@@ -31,11 +31,10 @@ pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], 
 
 // Extract the delimiter character from the content of a GREQ file. Or, use the default delimiter
 // if not specified.
-pub fn extract_delimiter(content: &str) -> char {
+pub fn extract_delimiter(content: &str) -> Option<char> {
     content.lines()
         .find(|line| line.to_lowercase().starts_with("delimiter"))
         .and_then(|line| line.split_once(':'))
         .and_then(|(_, value)| value.trim().chars().next())
-        .unwrap_or(DEFAULT_DELIMITER_CHAR)
 }
 

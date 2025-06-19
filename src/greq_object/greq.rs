@@ -5,6 +5,7 @@ use crate::greq_object::greq_http_request::GreqHttpRequest;
 use crate::greq_object::greq_response::GreqResponse;
 use crate::greq_object::greq_footer_condition::ConditionOperator;
 use crate::greq_object::greq_parser::*;
+use crate::constants::{DEFAULT_DELIMITER_CHAR};
 use futures::future::BoxFuture;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -13,15 +14,10 @@ use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use regex;
 use std::fs;
 
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SectionsDelimiter { value: char }
-impl Default for SectionsDelimiter { fn default() -> Self { SectionsDelimiter { value: '=' } } }
-
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Greq {
     pub file_contents: String,
-    pub sections_delimiter: SectionsDelimiter,
+    pub sections_delimiter: char,
     pub header: GreqHeader,
     pub content: GreqContent,
     pub footer: GreqFooter,
@@ -73,20 +69,20 @@ impl FromStr for Greq {
     // define a type for the parsing errors
     type Err = GreqError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(raw_file_contents: &str) -> Result<Self, Self::Err> {
         // initialize a new Greq object with the original file contents
         let mut greq = Greq {
-            file_contents: s.to_string(),
+            file_contents: raw_file_contents.to_string(),
             ..Default::default()
         };
 
-        // check if a custom delimiter was defined
-        let delimiter_char = extract_delimiter(s);
-        greq.sections_delimiter.value = delimiter_char;
+        // check if a custom delimiter was defined in the file
+        let delimiter_char = extract_delimiter(raw_file_contents).unwrap_or(DEFAULT_DELIMITER_CHAR);
+        greq.sections_delimiter = delimiter_char;
 
         // greq file must have 3 sections. 
         // the header (metadata), content (http raw request), and footer (the evaluation conditions)
-        let sections = parse_sections(s, greq.sections_delimiter.value)
+        let sections = parse_sections(raw_file_contents, greq.sections_delimiter)
             .map_err(|e| GreqError::from_error_code(e))?;
 
         print!("parsing header...");
