@@ -5,7 +5,7 @@ use crate::greq_object::greq_http_request::GreqHttpRequest;
 use crate::greq_object::greq_response::GreqResponse;
 use crate::greq_object::greq_footer_condition::ConditionOperator;
 use crate::greq_object::greq_parser::*;
-use crate::constants::{DEFAULT_DELIMITER_CHAR};
+use crate::constants::{DEFAULT_DELIMITER_CHAR, NEW_LINE};
 use futures::future::BoxFuture;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -86,19 +86,19 @@ impl FromStr for Greq {
             .map_err(|e| GreqError::from_error_code(e))?;
 
         print!("parsing header...");
-        greq.header = GreqHeader::from_str(&sections[0].join("\r\n"))
+        greq.header = GreqHeader::from_str(&sections[0].join(NEW_LINE))
             .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingHeaderSectionFailed))?;
         println!("done");
 
         print!("parsing content...");
-        greq.content = GreqContent::from_str(&sections[1].join("\r\n"))
+        greq.content = GreqContent::from_str(&sections[1].join(NEW_LINE))
             .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingContentSectionFailed))?;
         // set the default protocol to https
         greq.content.http_request.is_http = greq.header.is_http.unwrap_or(false);
         println!("done");
 
         print!("parsing footer...");
-        greq.footer = GreqFooter::from_str(&sections[2].join("\r\n"))
+        greq.footer = GreqFooter::from_str(&sections[2].join(NEW_LINE))
             .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingFooterSectionFailed))?;
         println!("done");
 
