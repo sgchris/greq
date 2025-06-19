@@ -1,64 +1,37 @@
 use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct GreqHeader {
     pub original_string: String,
 
     // the delimiter character to separate sections. Default '='.
-    // The delimiter is handled by the main Greq object. Here it's
-    // defined to avoid 'unknown header' error.
-    // Probably there's a better way to handle this.
+    // (This header is used by the parent Greq object to parse the file.)
     pub delimiter: char,
 
     pub project: String,          // the name of the project. Will be implemented.
     pub output_folder: String,    // path to a destination folder. Default current.
     pub output_file_name: String, // output filename. default current file name with ".response" extension.
 
-    // absolute path to the certificate (PFX)
-    pub certificate: String, // Absolute path to the certificate file (pfx) certificate password will be handled later
     // http and not https request
-    pub is_http: Option<bool>,
+    pub is_http: Option<bool>,  
 
     // the request that this file extends
     pub base_request: Option<String>,
+
     // get_response that request before executing this one
     pub depends_on: Option<String>,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum GreqHeaderErrorCodes {
+#[derive(Debug, PartialEq, Error)]
+pub enum GreqHeaderError {
+    #[error("Unknown header encountered in GreqHeader parsing")]
     UnknownHeader,
+    #[error("The line does not contain a colon sign")]
     LineHasNoColonSign,
 }
-
-#[derive(Debug)]
-pub struct GreqHeaderError {
-    pub code: GreqHeaderErrorCodes,
-    pub message: String
-}
-
-impl GreqHeaderErrorCodes {
-    pub fn error_message(&self) -> &'static str {
-        match self {
-            GreqHeaderErrorCodes::UnknownHeader => "Unknown header.",
-            GreqHeaderErrorCodes::LineHasNoColonSign => "The line does not contain a colon sign.",
-        }
-    }
-}
-
-impl GreqHeaderError {
-    pub fn new(code: GreqHeaderErrorCodes, message: &str) -> Self {
-        Self { code, message: message.to_string() }
-    }
-
-    pub fn from_error_code(code: GreqHeaderErrorCodes) -> Self {
-        let error_message = code.error_message();
-        Self::new(code, error_message)
-    }
-}
-
 
 impl FromStr for GreqHeader {
     type Err = GreqHeaderError;
@@ -95,14 +68,11 @@ impl FromStr for GreqHeader {
                 "output-file-name" => {
                     greq_header.output_file_name = header_value;
                 }
-                "certificate" => {
-                    greq_header.certificate = header_value;
-                }
                 "is-http" => {
                     greq_header.is_http = Some(true);
                 }
                 _ => {
-                    return Err(GreqHeaderError::from_error_code(GreqHeaderErrorCodes::UnknownHeader));
+                    return Err(GreqHeaderError::UnknownHeader)
                 }
             }
 
@@ -127,9 +97,6 @@ impl EnrichWith for GreqHeader {
         }
         if self.output_file_name.is_empty() && !object_to_merge.output_file_name.is_empty() {
             self.output_file_name = object_to_merge.output_file_name.to_string();
-        }
-        if self.certificate.is_empty() && !object_to_merge.certificate.is_empty() {
-            self.certificate = object_to_merge.certificate.to_string();
         }
 
         // Set is_http if not set in self
@@ -166,7 +133,7 @@ impl GreqHeader {
         }
 
         if contents.lines().find(|line| !line.trim().contains(":")).is_some() {
-            return Err(GreqHeaderError::from_error_code(GreqHeaderErrorCodes::LineHasNoColonSign));
+            return Err(GreqHeaderError::LineHasNoColonSign);
         }
 
         Ok(true)
@@ -182,8 +149,7 @@ mod tests {
         let input = "project: MyProject\n\
                      base-request: GET /api/data\n\
                      output-folder: /tmp\n\
-                     output-file-name: response.json\n\
-                     certificate: /path/to/certificate.pfx";
+                     output-file-name: response.json";
         let result = GreqHeader::from_str(input);
         assert!(result.is_ok());
         let header = result.unwrap();
@@ -191,7 +157,6 @@ mod tests {
         assert_eq!(header.base_request.unwrap_or("".to_string()), "get /api/data");
         assert_eq!(header.output_folder, "/tmp");
         assert_eq!(header.output_file_name, "response.json");
-        assert_eq!(header.certificate, "/path/to/certificate.pfx");
     }
 
     #[test]
@@ -227,8 +192,7 @@ mod tests {
         let input = "project: MyProject\n\
                      output-folder: /tmp\n\
                      output-folder: /var/tmp\n\
-                     base-request: GET /api/data\n\
-                     certificate: /path/to/certificate.pfx";
+                     base-request: GET /api/data";
         let result = GreqHeader::from_str(input);
         assert!(result.is_ok());
         let header = result.unwrap();
@@ -257,7 +221,6 @@ mod tests {
             project: String::new(),
             output_folder: String::new(),
             output_file_name: String::new(),
-            certificate: String::new(),
             is_http: None,
             base_request: None,
             depends_on: None,
@@ -268,7 +231,6 @@ mod tests {
             project: String::from("MyProject"),
             output_folder: String::from("/output/folder"),
             output_file_name: String::from("output.txt"),
-            certificate: String::from("/path/to/certificate"),
             is_http: Some(true),
             base_request: Some(String::from("/path/to/base/request")),
             depends_on: Some(String::from("/path/to/dependson")),
@@ -280,7 +242,6 @@ mod tests {
         assert_eq!(header.project, "MyProject");
         assert_eq!(header.output_folder, "/output/folder");
         assert_eq!(header.output_file_name, "output.txt");
-        assert_eq!(header.certificate, "/path/to/certificate");
         assert_eq!(header.is_http, Some(true));
         assert_eq!(header.base_request, Some(String::from("/path/to/base/request")));
         assert_eq!(header.depends_on, Some(String::from("/path/to/dependson")));
@@ -292,7 +253,6 @@ mod tests {
             project: String::from("ExistingProject"),
             output_folder: String::new(),
             output_file_name: String::from("existing_output.txt"),
-            certificate: String::new(),
             is_http: Some(false),
             base_request: None,
             depends_on: Some(String::from("/path/to/depends/on")),
@@ -303,7 +263,6 @@ mod tests {
             project: String::from("NewProject"),
             output_folder: String::from("/new/output/folder"),
             output_file_name: String::from("new_output.txt"),
-            certificate: String::from("/new/path/to/certificate"),
             is_http: Some(true),
             base_request: Some(String::from("/new/path/to/base/request")),
             depends_on: Some(String::from("/new/path/to/depends/on")),
@@ -315,7 +274,6 @@ mod tests {
         assert_eq!(header.project, "ExistingProject"); // Not overridden
         assert_eq!(header.output_folder, "/new/output/folder");
         assert_eq!(header.output_file_name, "existing_output.txt"); // Not overridden
-        assert_eq!(header.certificate, "/new/path/to/certificate");
         assert_eq!(header.is_http, Some(false)); // Not overridden
         assert_eq!(header.base_request, Some(String::from("/new/path/to/base/request")));
         assert_eq!(header.depends_on, Some(String::from("/path/to/depends/on"))); // Not overridden
@@ -327,7 +285,6 @@ mod tests {
             project: String::from("ExistingProject"),
             output_folder: String::from("/existing/output/folder"),
             output_file_name: String::from("existing_output.txt"),
-            certificate: String::from("/existing/path/to/certificate"),
             is_http: Some(false),
             base_request: Some(String::from("/existing/path/to/base/request")),
             depends_on: Some(String::from("/existing/path/to/depends/on")),
@@ -338,7 +295,6 @@ mod tests {
             project: String::from("NewProject"),
             output_folder: String::from("/new/output/folder"),
             output_file_name: String::from("new_output.txt"),
-            certificate: String::from("/new/path/to/certificate"),
             is_http: Some(true),
             base_request: Some(String::from("/new/path/to/base/request")),
             depends_on: Some(String::from("/new/path/to/depends/on")),
@@ -351,7 +307,6 @@ mod tests {
         assert_eq!(header.project, "ExistingProject");
         assert_eq!(header.output_folder, "/existing/output/folder");
         assert_eq!(header.output_file_name, "existing_output.txt");
-        assert_eq!(header.certificate, "/existing/path/to/certificate");
         assert_eq!(header.is_http, Some(false));
         assert_eq!(header.base_request, Some(String::from("/existing/path/to/base/request")));
         assert_eq!(header.depends_on, Some(String::from("/existing/path/to/depends/on")));
