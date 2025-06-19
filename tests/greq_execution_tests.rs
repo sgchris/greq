@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use greq::greq_object::greq::Greq;
 use greq::greq_object::greq::GreqErrorCodes;
 use tokio;

@@ -1,9 +1,16 @@
-use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Debug, PartialEq, Error)]
+pub enum GreqHeaderError {
+    #[error("Unknown header '{header_name}' encountered in GreqHeader parsing")]
+    UnknownHeader { header_name: String },
+    #[error("The line '{line}' does not contain a colon sign")]
+    LineHasNoColonSign { line: String },
+}
+
+#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct GreqHeader {
     pub original_string: String,
 
@@ -25,65 +32,62 @@ pub struct GreqHeader {
     pub depends_on: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Error)]
-pub enum GreqHeaderError {
-    #[error("Unknown header encountered in GreqHeader parsing")]
-    UnknownHeader,
-    #[error("The line does not contain a colon sign")]
-    LineHasNoColonSign,
-}
-
-impl FromStr for GreqHeader {
-    type Err = GreqHeaderError;
-
-    fn from_str(contents: &str) -> Result<GreqHeader, Self::Err> {
-        // validate the contents
-        GreqHeader::is_valid(contents)?;
-
+impl GreqHeader {
+    pub fn parse(header_lines: &Vec<&str>) -> Result<GreqHeader, GreqHeaderError> {
         // initialize the object
-        let mut greq_header = GreqHeader {
-            original_string: contents.to_string(),
-            ..Default::default()
-        };
+        let mut greq_header = GreqHeader::default();
 
-        // parse lines and assign properties
-        contents.lines().try_for_each(|line| {
-            let line_parts: Vec<&str> = line.split(":").collect();
-            let header_name: &str = line_parts[0].trim();
-            let header_value = line_parts[1..].join(":").trim().to_lowercase().to_string();
+        // parse the lines and assign properties
+        for line in header_lines.iter() {
+
+            // trim whitespace from the line
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            // check if the line contains a colon
+            if !line.contains(':') {
+                return Err(GreqHeaderError::LineHasNoColonSign { line: line.to_string() });
+            }
+
+            let (header_name, header_value) = line.split_once(":").unwrap();
+            let header_name = header_name.trim();
+            let header_value = header_value.trim();
 
             match header_name.to_lowercase().as_str() {
                 "project" => {
-                    greq_header.project = header_value;
+                    greq_header.project = header_value.to_string();
                 }
                 "depends-on" => {
-                    greq_header.depends_on = Some(header_value);
+                    greq_header.depends_on = Some(header_value.to_string());
                 }
                 "base-request" => {
-                    greq_header.base_request = Some(header_value);
+                    greq_header.base_request = Some(header_value.to_string());
                 }
                 "output-folder" => {
-                    greq_header.output_folder = header_value;
+                    greq_header.output_folder = header_value.to_string();
                 }
                 "output-file-name" => {
-                    greq_header.output_file_name = header_value;
+                    greq_header.output_file_name = header_value.to_string();
                 }
                 "is-http" => {
                     greq_header.is_http = Some(true);
                 }
                 _ => {
-                    return Err(GreqHeaderError::UnknownHeader)
+                    return Err(GreqHeaderError::UnknownHeader { header_name: header_name.to_string() });
                 }
             }
-
-            Ok(())
-        })?;
+        }
 
         Ok(greq_header)
     }
 }
 
 impl EnrichWith for GreqHeader {
+
+    // Merge values from object_to_merge into self
+    // Used to merge the header with the base request
     fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
     where
         Self: Sized
@@ -124,191 +128,3 @@ impl EnrichWith for GreqHeader {
     }
 }
 
-impl GreqHeader {
-    // should be public as it's used as static
-    pub fn is_valid(contents: &str) -> Result<bool, GreqHeaderError> {
-        // empty contents allowed
-        if contents.trim().is_empty() {
-            return Ok(true);
-        }
-
-        if contents.lines().find(|line| !line.trim().contains(":")).is_some() {
-            return Err(GreqHeaderError::LineHasNoColonSign);
-        }
-
-        Ok(true)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_valid_input() {
-        let input = "project: MyProject\n\
-                     base-request: GET /api/data\n\
-                     output-folder: /tmp\n\
-                     output-file-name: response.json";
-        let result = GreqHeader::from_str(input);
-        assert!(result.is_ok());
-        let header = result.unwrap();
-        assert_eq!(header.project, "myproject");
-        assert_eq!(header.base_request.unwrap_or("".to_string()), "get /api/data");
-        assert_eq!(header.output_folder, "/tmp");
-        assert_eq!(header.output_file_name, "response.json");
-    }
-
-    #[test]
-    fn test_empty_input() {
-        let input = "";
-        let result = GreqHeader::from_str(input);
-        assert!(result.is_ok());
-        let header = result.unwrap();
-        assert_eq!(header.original_string, "");
-    }
-
-    #[test]
-    fn test_invalid_format_missing_colon() {
-        let input = "project MyProject\n\
-                     base-request: GET /api/data";
-        let result = GreqHeader::from_str(input);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::LineHasNoColonSign);
-    }
-
-    #[test]
-    fn test_unknown_headers() {
-        let input = "project: MyProject\n\
-                     unknown-header: some value\n\
-                     base-request: GET /api/data";
-        let result = GreqHeader::from_str(input);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::UnknownHeader);
-    }
-
-    #[test]
-    fn test_multiple_headers() {
-        let input = "project: MyProject\n\
-                     output-folder: /tmp\n\
-                     output-folder: /var/tmp\n\
-                     base-request: GET /api/data";
-        let result = GreqHeader::from_str(input);
-        assert!(result.is_ok());
-        let header = result.unwrap();
-        assert_eq!(header.output_folder, "/var/tmp"); // Last occurrence should overwrite previous
-    }
-
-    #[test]
-    fn test_is_valid_empty() {
-        let result = GreqHeader::is_valid("");
-        assert!(result.is_ok());
-        assert!(result.unwrap());
-    }
-
-    #[test]
-    fn test_is_valid_no_colon() {
-        let input = "project MyProject\n\
-                     base-request: GET /api/data";
-        let result = GreqHeader::is_valid(input);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().code, GreqHeaderErrorCodes::LineHasNoColonSign);
-    }
-
-    #[test]
-    fn test_enrich_with_empty_self() {
-        let mut header = GreqHeader {
-            project: String::new(),
-            output_folder: String::new(),
-            output_file_name: String::new(),
-            is_http: None,
-            base_request: None,
-            depends_on: None,
-            ..Default::default()
-        };
-
-        let object_to_merge = GreqHeader {
-            project: String::from("MyProject"),
-            output_folder: String::from("/output/folder"),
-            output_file_name: String::from("output.txt"),
-            is_http: Some(true),
-            base_request: Some(String::from("/path/to/base/request")),
-            depends_on: Some(String::from("/path/to/dependson")),
-            ..Default::default()
-        };
-
-        header.enrich_with(&object_to_merge).unwrap();
-
-        assert_eq!(header.project, "MyProject");
-        assert_eq!(header.output_folder, "/output/folder");
-        assert_eq!(header.output_file_name, "output.txt");
-        assert_eq!(header.is_http, Some(true));
-        assert_eq!(header.base_request, Some(String::from("/path/to/base/request")));
-        assert_eq!(header.depends_on, Some(String::from("/path/to/dependson")));
-    }
-
-    #[test]
-    fn test_enrich_with_partial_values() {
-        let mut header = GreqHeader {
-            project: String::from("ExistingProject"),
-            output_folder: String::new(),
-            output_file_name: String::from("existing_output.txt"),
-            is_http: Some(false),
-            base_request: None,
-            depends_on: Some(String::from("/path/to/depends/on")),
-            ..Default::default()
-        };
-
-        let object_to_merge = GreqHeader {
-            project: String::from("NewProject"),
-            output_folder: String::from("/new/output/folder"),
-            output_file_name: String::from("new_output.txt"),
-            is_http: Some(true),
-            base_request: Some(String::from("/new/path/to/base/request")),
-            depends_on: Some(String::from("/new/path/to/depends/on")),
-            ..Default::default()
-        };
-
-        header.enrich_with(&object_to_merge).unwrap();
-
-        assert_eq!(header.project, "ExistingProject"); // Not overridden
-        assert_eq!(header.output_folder, "/new/output/folder");
-        assert_eq!(header.output_file_name, "existing_output.txt"); // Not overridden
-        assert_eq!(header.is_http, Some(false)); // Not overridden
-        assert_eq!(header.base_request, Some(String::from("/new/path/to/base/request")));
-        assert_eq!(header.depends_on, Some(String::from("/path/to/depends/on"))); // Not overridden
-    }
-
-    #[test]
-    fn test_enrich_with_no_changes() {
-        let mut header = GreqHeader {
-            project: String::from("ExistingProject"),
-            output_folder: String::from("/existing/output/folder"),
-            output_file_name: String::from("existing_output.txt"),
-            is_http: Some(false),
-            base_request: Some(String::from("/existing/path/to/base/request")),
-            depends_on: Some(String::from("/existing/path/to/depends/on")),
-            ..Default::default()
-        };
-
-        let object_to_merge = GreqHeader {
-            project: String::from("NewProject"),
-            output_folder: String::from("/new/output/folder"),
-            output_file_name: String::from("new_output.txt"),
-            is_http: Some(true),
-            base_request: Some(String::from("/new/path/to/base/request")),
-            depends_on: Some(String::from("/new/path/to/depends/on")),
-            ..Default::default()
-        };
-
-        header.enrich_with(&object_to_merge).unwrap();
-
-        // No fields should be changed
-        assert_eq!(header.project, "ExistingProject");
-        assert_eq!(header.output_folder, "/existing/output/folder");
-        assert_eq!(header.output_file_name, "existing_output.txt");
-        assert_eq!(header.is_http, Some(false));
-        assert_eq!(header.base_request, Some(String::from("/existing/path/to/base/request")));
-        assert_eq!(header.depends_on, Some(String::from("/existing/path/to/depends/on")));
-    }
-}

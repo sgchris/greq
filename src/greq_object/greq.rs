@@ -86,7 +86,7 @@ impl FromStr for Greq {
             .map_err(|e| GreqError::from_error_code(e))?;
 
         print!("parsing header...");
-        greq.header = GreqHeader::from_str(&sections[0].join(NEW_LINE))
+        greq.header = GreqHeader::parse(&sections[0])
             .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingHeaderSectionFailed))?;
         println!("done");
 
