@@ -107,13 +107,16 @@ impl FromStr for Greq {
 }
 
 impl EnrichWith for Greq {
-    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+
+    /// Enrich the current Greq object with another Greq object.
+    /// used to fill in the missing parts of the request.
+    fn enrich_with(&mut self, another_object: &Self) -> Result<(), String>
     where
         Self: Sized,
     {
-        self.header.merge_with(&object_to_merge.header)?;
-        self.content.enrich_with(&object_to_merge.content)?;
-        self.footer.enrich_with(&object_to_merge.footer)?;
+        self.header.enrich_with(&another_object.header)?;
+        self.content.enrich_with(&another_object.content)?;
+        self.footer.enrich_with(&another_object.footer)?;
 
         Ok(())
     }

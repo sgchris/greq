@@ -102,41 +102,39 @@ impl GreqHeader {
         Ok(greq_header)
     }
 
-    // Merge values from object_to_merge into self
-    // Used to merge the header with the base request
-    pub fn merge_with(&mut self, object_to_merge: &Self) -> Result<(), String>
-    where
-        Self: Sized
+    // Enrich values from another_object into self
+    // Used to fill in missing values in self with values from another_object
+    pub fn enrich_with(&mut self, another_object: &Self) -> Result<(), String>
     {
-        // Override values in self with values from object_to_merge if they are not empty
-        if self.project.is_empty() && !object_to_merge.project.is_empty() {
-            self.project = object_to_merge.project.to_string();
+        // Override values in self with values from another_object if they are not empty
+        if self.project.is_empty() && !another_object.project.is_empty() {
+            self.project = another_object.project.to_string();
         }
-        if self.output_folder.is_empty() && !object_to_merge.output_folder.is_empty() {
-            self.output_folder = object_to_merge.output_folder.to_string();
+        if self.output_folder.is_empty() && !another_object.output_folder.is_empty() {
+            self.output_folder = another_object.output_folder.to_string();
         }
-        if self.output_file_name.is_empty() && !object_to_merge.output_file_name.is_empty() {
-            self.output_file_name = object_to_merge.output_file_name.to_string();
+        if self.output_file_name.is_empty() && !another_object.output_file_name.is_empty() {
+            self.output_file_name = another_object.output_file_name.to_string();
         }
 
         // Set is_http if not set in self
         if self.is_http.is_none() {
-            if let Some(is_http_value) = object_to_merge.is_http {
+            if let Some(is_http_value) = another_object.is_http {
                 self.is_http = Some(is_http_value);
             }
         }
 
         // Set base_request if not set in self
         if self.base_request.is_none() {
-            if object_to_merge.base_request.is_some() {
-                self.base_request = object_to_merge.base_request.clone(); // Option can use clone
+            if another_object.base_request.is_some() {
+                self.base_request = another_object.base_request.clone(); // Option can use clone
             }
         }
 
         // Set depends_on if not set in self
         if self.depends_on.is_none() {
-            if object_to_merge.depends_on.is_some() {
-                self.depends_on = object_to_merge.depends_on.clone(); // Option can use clone
+            if another_object.depends_on.is_some() {
+                self.depends_on = another_object.depends_on.clone(); // Option can use clone
             }
         }
 

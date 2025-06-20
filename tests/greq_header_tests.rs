@@ -295,7 +295,7 @@ fn test_parse_very_long_values() {
 }
 
 #[test]
-fn test_merge_with_empty_self_filled_other() {
+fn test_enrich_with_empty_self_filled_other() {
     let mut self_header = GreqHeader::default();
     let other_header = GreqHeader {
         original_string: "test".to_string(),
@@ -308,7 +308,7 @@ fn test_merge_with_empty_self_filled_other() {
         depends_on: Some("dependency.greq".to_string()),
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     assert_eq!(self_header.project, "test_project");
@@ -320,7 +320,7 @@ fn test_merge_with_empty_self_filled_other() {
 }
 
 #[test]
-fn test_merge_with_filled_self_empty_other() {
+fn test_enrich_with_filled_self_empty_other() {
     let mut self_header = GreqHeader {
         original_string: "self".to_string(),
         delimiter: '#',
@@ -333,7 +333,7 @@ fn test_merge_with_filled_self_empty_other() {
     };
     let other_header = GreqHeader::default();
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     // Self values should remain unchanged
@@ -346,7 +346,7 @@ fn test_merge_with_filled_self_empty_other() {
 }
 
 #[test]
-fn test_merge_with_both_filled_self_takes_precedence() {
+fn test_enrich_with_both_filled_self_takes_precedence() {
     let mut self_header = GreqHeader {
         original_string: "self".to_string(),
         delimiter: '#',
@@ -368,7 +368,7 @@ fn test_merge_with_both_filled_self_takes_precedence() {
         depends_on: Some("other_dependency.greq".to_string()),
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     // Self values should remain unchanged (precedence)
@@ -381,7 +381,7 @@ fn test_merge_with_both_filled_self_takes_precedence() {
 }
 
 #[test]
-fn test_merge_with_partial_merge() {
+fn test_enrich_with_partial_merge() {
     let mut self_header = GreqHeader {
         original_string: "".to_string(),
         delimiter: '=',
@@ -403,7 +403,7 @@ fn test_merge_with_partial_merge() {
         depends_on: Some("other_dependency.greq".to_string()),
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     assert_eq!(self_header.project, "self_project"); // unchanged (has value)
@@ -415,7 +415,7 @@ fn test_merge_with_partial_merge() {
 }
 
 #[test]
-fn test_merge_with_option_fields_none_to_some() {
+fn test_enrich_with_option_fields_none_to_some() {
     let mut self_header = GreqHeader {
         is_http: None,
         base_request: None,
@@ -429,7 +429,7 @@ fn test_merge_with_option_fields_none_to_some() {
         ..Default::default()
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     assert_eq!(self_header.is_http, Some(true));
@@ -438,7 +438,7 @@ fn test_merge_with_option_fields_none_to_some() {
 }
 
 #[test]
-fn test_merge_with_option_fields_some_to_none() {
+fn test_enrich_with_option_fields_some_to_none() {
     let mut self_header = GreqHeader {
         is_http: Some(false),
         base_request: Some("self_base.greq".to_string()),
@@ -452,7 +452,7 @@ fn test_merge_with_option_fields_some_to_none() {
         ..Default::default()
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     // Self values should remain unchanged
@@ -462,7 +462,7 @@ fn test_merge_with_option_fields_some_to_none() {
 }
 
 #[test]
-fn test_merge_with_both_none_remains_none() {
+fn test_enrich_with_both_none_remains_none() {
     let mut self_header = GreqHeader {
         is_http: None,
         base_request: None,
@@ -476,7 +476,7 @@ fn test_merge_with_both_none_remains_none() {
         ..Default::default()
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     assert_eq!(self_header.is_http, None);
@@ -485,7 +485,7 @@ fn test_merge_with_both_none_remains_none() {
 }
 
 #[test]
-fn test_merge_with_identical_objects() {
+fn test_enrich_with_identical_objects() {
     let mut self_header = GreqHeader {
         original_string: "test".to_string(),
         delimiter: '=',
@@ -507,7 +507,7 @@ fn test_merge_with_identical_objects() {
         depends_on: Some("dep.greq".to_string()),
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     // Should remain identical
@@ -520,11 +520,11 @@ fn test_merge_with_identical_objects() {
 }
 
 #[test]
-fn test_merge_with_both_empty() {
+fn test_enrich_with_both_empty() {
     let mut self_header = GreqHeader::default();
     let other_header = GreqHeader::default();
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     // Should remain default
@@ -532,7 +532,7 @@ fn test_merge_with_both_empty() {
 }
 
 #[test]
-fn test_merge_with_whitespace_handling() {
+fn test_enrich_with_whitespace_handling() {
     let mut self_header = GreqHeader {
         project: "".to_string(),
         output_folder: "   ".to_string(), // whitespace only
@@ -544,7 +544,7 @@ fn test_merge_with_whitespace_handling() {
         ..Default::default()
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     assert_eq!(self_header.project, "other_project"); // merged (was empty)
@@ -553,7 +553,7 @@ fn test_merge_with_whitespace_handling() {
 }
 
 #[test]
-fn test_merge_with_special_characters() {
+fn test_enrich_with_special_characters() {
     let mut self_header = GreqHeader::default();
     let other_header = GreqHeader {
         project: "project-with-dashes".to_string(),
@@ -564,7 +564,7 @@ fn test_merge_with_special_characters() {
         ..Default::default()
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     assert_eq!(self_header.project, "project-with-dashes");
@@ -575,7 +575,7 @@ fn test_merge_with_special_characters() {
 }
 
 #[test]
-fn test_merge_with_preserves_original_string_and_delimiter() {
+fn test_enrich_with_preserves_original_string_and_delimiter() {
     let mut self_header = GreqHeader {
         original_string: "self_original".to_string(),
         delimiter: '#',
@@ -588,7 +588,7 @@ fn test_merge_with_preserves_original_string_and_delimiter() {
         ..Default::default()
     };
 
-    let result = self_header.merge_with(&other_header);
+    let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
     // original_string and delimiter should not be affected by merge
