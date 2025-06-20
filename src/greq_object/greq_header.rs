@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Error)]
@@ -102,13 +101,10 @@ impl GreqHeader {
 
         Ok(greq_header)
     }
-}
-
-impl EnrichWith for GreqHeader {
 
     // Merge values from object_to_merge into self
     // Used to merge the header with the base request
-    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+    pub fn merge_with(&mut self, object_to_merge: &Self) -> Result<(), String>
     where
         Self: Sized
     {

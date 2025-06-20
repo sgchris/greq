@@ -294,3 +294,307 @@ fn test_parse_very_long_values() {
     assert_eq!(header.project, long_value);
 }
 
+#[test]
+fn test_merge_with_empty_self_filled_other() {
+    let mut self_header = GreqHeader::default();
+    let other_header = GreqHeader {
+        original_string: "test".to_string(),
+        delimiter: '|',
+        project: "test_project".to_string(),
+        output_folder: "/test/output".to_string(),
+        output_file_name: "test.response".to_string(),
+        is_http: Some(true),
+        base_request: Some("base.greq".to_string()),
+        depends_on: Some("dependency.greq".to_string()),
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    assert_eq!(self_header.project, "test_project");
+    assert_eq!(self_header.output_folder, "/test/output");
+    assert_eq!(self_header.output_file_name, "test.response");
+    assert_eq!(self_header.is_http, Some(true));
+    assert_eq!(self_header.base_request, Some("base.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("dependency.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_filled_self_empty_other() {
+    let mut self_header = GreqHeader {
+        original_string: "self".to_string(),
+        delimiter: '#',
+        project: "self_project".to_string(),
+        output_folder: "/self/output".to_string(),
+        output_file_name: "self.response".to_string(),
+        is_http: Some(false),
+        base_request: Some("self_base.greq".to_string()),
+        depends_on: Some("self_dependency.greq".to_string()),
+    };
+    let other_header = GreqHeader::default();
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    // Self values should remain unchanged
+    assert_eq!(self_header.project, "self_project");
+    assert_eq!(self_header.output_folder, "/self/output");
+    assert_eq!(self_header.output_file_name, "self.response");
+    assert_eq!(self_header.is_http, Some(false));
+    assert_eq!(self_header.base_request, Some("self_base.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("self_dependency.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_both_filled_self_takes_precedence() {
+    let mut self_header = GreqHeader {
+        original_string: "self".to_string(),
+        delimiter: '#',
+        project: "self_project".to_string(),
+        output_folder: "/self/output".to_string(),
+        output_file_name: "self.response".to_string(),
+        is_http: Some(false),
+        base_request: Some("self_base.greq".to_string()),
+        depends_on: Some("self_dependency.greq".to_string()),
+    };
+    let other_header = GreqHeader {
+        original_string: "other".to_string(),
+        delimiter: '|',
+        project: "other_project".to_string(),
+        output_folder: "/other/output".to_string(),
+        output_file_name: "other.response".to_string(),
+        is_http: Some(true),
+        base_request: Some("other_base.greq".to_string()),
+        depends_on: Some("other_dependency.greq".to_string()),
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    // Self values should remain unchanged (precedence)
+    assert_eq!(self_header.project, "self_project");
+    assert_eq!(self_header.output_folder, "/self/output");
+    assert_eq!(self_header.output_file_name, "self.response");
+    assert_eq!(self_header.is_http, Some(false));
+    assert_eq!(self_header.base_request, Some("self_base.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("self_dependency.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_partial_merge() {
+    let mut self_header = GreqHeader {
+        original_string: "".to_string(),
+        delimiter: '=',
+        project: "self_project".to_string(), // has value
+        output_folder: "".to_string(), // empty
+        output_file_name: "self.response".to_string(), // has value
+        is_http: None, // None
+        base_request: Some("self_base.greq".to_string()), // has value
+        depends_on: None, // None
+    };
+    let other_header = GreqHeader {
+        original_string: "other".to_string(),
+        delimiter: '|',
+        project: "other_project".to_string(),
+        output_folder: "/other/output".to_string(),
+        output_file_name: "other.response".to_string(),
+        is_http: Some(true),
+        base_request: Some("other_base.greq".to_string()),
+        depends_on: Some("other_dependency.greq".to_string()),
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    assert_eq!(self_header.project, "self_project"); // unchanged (has value)
+    assert_eq!(self_header.output_folder, "/other/output"); // merged (was empty)
+    assert_eq!(self_header.output_file_name, "self.response"); // unchanged (has value)
+    assert_eq!(self_header.is_http, Some(true)); // merged (was None)
+    assert_eq!(self_header.base_request, Some("self_base.greq".to_string())); // unchanged (has value)
+    assert_eq!(self_header.depends_on, Some("other_dependency.greq".to_string())); // merged (was None)
+}
+
+#[test]
+fn test_merge_with_option_fields_none_to_some() {
+    let mut self_header = GreqHeader {
+        is_http: None,
+        base_request: None,
+        depends_on: None,
+        ..Default::default()
+    };
+    let other_header = GreqHeader {
+        is_http: Some(true),
+        base_request: Some("base.greq".to_string()),
+        depends_on: Some("dep.greq".to_string()),
+        ..Default::default()
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    assert_eq!(self_header.is_http, Some(true));
+    assert_eq!(self_header.base_request, Some("base.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("dep.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_option_fields_some_to_none() {
+    let mut self_header = GreqHeader {
+        is_http: Some(false),
+        base_request: Some("self_base.greq".to_string()),
+        depends_on: Some("self_dep.greq".to_string()),
+        ..Default::default()
+    };
+    let other_header = GreqHeader {
+        is_http: None,
+        base_request: None,
+        depends_on: None,
+        ..Default::default()
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    // Self values should remain unchanged
+    assert_eq!(self_header.is_http, Some(false));
+    assert_eq!(self_header.base_request, Some("self_base.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("self_dep.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_both_none_remains_none() {
+    let mut self_header = GreqHeader {
+        is_http: None,
+        base_request: None,
+        depends_on: None,
+        ..Default::default()
+    };
+    let other_header = GreqHeader {
+        is_http: None,
+        base_request: None,
+        depends_on: None,
+        ..Default::default()
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    assert_eq!(self_header.is_http, None);
+    assert_eq!(self_header.base_request, None);
+    assert_eq!(self_header.depends_on, None);
+}
+
+#[test]
+fn test_merge_with_identical_objects() {
+    let mut self_header = GreqHeader {
+        original_string: "test".to_string(),
+        delimiter: '=',
+        project: "project".to_string(),
+        output_folder: "/output".to_string(),
+        output_file_name: "test.response".to_string(),
+        is_http: Some(true),
+        base_request: Some("base.greq".to_string()),
+        depends_on: Some("dep.greq".to_string()),
+    };
+    let other_header = GreqHeader {
+        original_string: "test".to_string(),
+        delimiter: '=',
+        project: "project".to_string(),
+        output_folder: "/output".to_string(),
+        output_file_name: "test.response".to_string(),
+        is_http: Some(true),
+        base_request: Some("base.greq".to_string()),
+        depends_on: Some("dep.greq".to_string()),
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    // Should remain identical
+    assert_eq!(self_header.project, "project");
+    assert_eq!(self_header.output_folder, "/output");
+    assert_eq!(self_header.output_file_name, "test.response");
+    assert_eq!(self_header.is_http, Some(true));
+    assert_eq!(self_header.base_request, Some("base.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("dep.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_both_empty() {
+    let mut self_header = GreqHeader::default();
+    let other_header = GreqHeader::default();
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    // Should remain default
+    assert_eq!(self_header, GreqHeader::default());
+}
+
+#[test]
+fn test_merge_with_whitespace_handling() {
+    let mut self_header = GreqHeader {
+        project: "".to_string(),
+        output_folder: "   ".to_string(), // whitespace only
+        ..Default::default()
+    };
+    let other_header = GreqHeader {
+        project: "other_project".to_string(),
+        output_folder: "/other/output".to_string(),
+        ..Default::default()
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    assert_eq!(self_header.project, "other_project"); // merged (was empty)
+    // Note: whitespace-only strings are not considered empty by is_empty()
+    assert_eq!(self_header.output_folder, "   "); // not merged (has whitespace)
+}
+
+#[test]
+fn test_merge_with_special_characters() {
+    let mut self_header = GreqHeader::default();
+    let other_header = GreqHeader {
+        project: "project-with-dashes".to_string(),
+        output_folder: "/path/with spaces/and-dashes".to_string(),
+        output_file_name: "file_name.with.dots".to_string(),
+        base_request: Some("base-request.greq".to_string()),
+        depends_on: Some("dependency_file.greq".to_string()),
+        ..Default::default()
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    assert_eq!(self_header.project, "project-with-dashes");
+    assert_eq!(self_header.output_folder, "/path/with spaces/and-dashes");
+    assert_eq!(self_header.output_file_name, "file_name.with.dots");
+    assert_eq!(self_header.base_request, Some("base-request.greq".to_string()));
+    assert_eq!(self_header.depends_on, Some("dependency_file.greq".to_string()));
+}
+
+#[test]
+fn test_merge_with_preserves_original_string_and_delimiter() {
+    let mut self_header = GreqHeader {
+        original_string: "self_original".to_string(),
+        delimiter: '#',
+        ..Default::default()
+    };
+    let other_header = GreqHeader {
+        original_string: "other_original".to_string(),
+        delimiter: '|',
+        project: "other_project".to_string(),
+        ..Default::default()
+    };
+
+    let result = self_header.merge_with(&other_header);
+    assert!(result.is_ok());
+
+    // original_string and delimiter should not be affected by merge
+    assert_eq!(self_header.original_string, "self_original");
+    assert_eq!(self_header.delimiter, '#');
+    // but other fields should merge
+    assert_eq!(self_header.project, "other_project");
+}
+

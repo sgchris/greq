@@ -111,7 +111,7 @@ impl EnrichWith for Greq {
     where
         Self: Sized,
     {
-        self.header.enrich_with(&object_to_merge.header)?;
+        self.header.merge_with(&object_to_merge.header)?;
         self.content.enrich_with(&object_to_merge.content)?;
         self.footer.enrich_with(&object_to_merge.footer)?;
 
