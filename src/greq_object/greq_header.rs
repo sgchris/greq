@@ -8,6 +8,12 @@ pub enum GreqHeaderError {
     UnknownHeader { header_name: String },
     #[error("The line '{line}' does not contain a colon sign")]
     LineHasNoColonSign { line: String },
+    #[error("Header has no name before the colon sign: '{line}'")]
+    HeaderHasNoName { line: String },
+    #[error("Header has no value after the colon sign: '{header_name}'")]
+    HeaderHasNoValue { header_name: String },
+    #[error("Not valid header value '{line}'")]
+    InvalidHeaderValue { line: String },
 }
 
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
@@ -55,6 +61,16 @@ impl GreqHeader {
             let header_name = header_name.trim();
             let header_value = header_value.trim();
 
+            // check if the header name is empty
+            if header_name.is_empty() {
+                return Err(GreqHeaderError::HeaderHasNoName { line: line.to_string() });
+            }
+
+            // check if the header value is empty
+            if header_value.is_empty() {
+                return Err(GreqHeaderError::HeaderHasNoValue { header_name: header_name.to_string() });
+            }
+
             match header_name.to_lowercase().as_str() {
                 "project" => {
                     greq_header.project = header_value.to_string();
@@ -72,7 +88,11 @@ impl GreqHeader {
                     greq_header.output_file_name = header_value.to_string();
                 }
                 "is-http" => {
-                    greq_header.is_http = Some(true);
+                    greq_header.is_http = match header_value.to_lowercase().as_str() {
+                        "true" | "yes" | "1" => Some(true),
+                        "false" | "no" | "0" => Some(false),
+                        _ => return Err(GreqHeaderError::InvalidHeaderValue { line: line.to_string() }),
+                    };
                 }
                 _ => {
                     return Err(GreqHeaderError::UnknownHeader { header_name: header_name.to_string() });

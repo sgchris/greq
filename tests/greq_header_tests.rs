@@ -9,6 +9,42 @@ fn test_parse_empty_header() {
 }
 
 #[test]
+fn test_parse_empty_values() {
+    let lines = vec![
+        "project:",
+        "output-folder:",
+        "depends-on:",
+    ];
+
+    let result = GreqHeader::parse(&lines);
+    assert!(result.is_err());
+    
+    // Should error on the first empty value encountered
+    match result.unwrap_err() {
+        GreqHeaderError::HeaderHasNoValue { header_name } => {
+            assert_eq!(header_name, "project");
+        }
+        _ => panic!("Expected EmptyValue error"),
+    }
+}
+
+#[test]
+fn test_parse_colon_at_beginning() {
+    let line_without_name = ":value_without_header_name";
+    let lines = vec![line_without_name];
+
+    let result = GreqHeader::parse(&lines);
+    assert!(result.is_err());
+
+    match result.unwrap_err() {
+        GreqHeaderError::HeaderHasNoName { line } => {
+            assert_eq!(line, line_without_name);
+        }
+        _ => panic!("Expected EmptyValue error"),
+    }
+}
+
+#[test]
 fn test_parse_valid_complete_header() {
     let lines = vec![
         "project: MyProject",
@@ -16,7 +52,7 @@ fn test_parse_valid_complete_header() {
         "output-file-name: test.response",
         "depends-on: auth_request",
         "base-request: base.greq",
-        "is-http:",
+        "is-http: true",
     ];
 
     let result = GreqHeader::parse(&lines);
@@ -74,7 +110,7 @@ fn test_parse_case_insensitive_headers() {
         "Output-Folder: /tmp",
         "DEPENDS-ON: auth",
         "Base-Request: base.greq",
-        "IS-HTTP:",
+        "IS-HTTP:true",
     ];
 
     let result = GreqHeader::parse(&lines);
@@ -126,23 +162,6 @@ fn test_parse_unknown_header() {
 }
 
 #[test]
-fn test_parse_empty_values() {
-    let lines = vec![
-        "project:",
-        "output-folder:",
-        "depends-on:",
-    ];
-
-    let result = GreqHeader::parse(&lines);
-    assert!(result.is_ok());
-    let header = result.unwrap();
-
-    assert_eq!(header.project, "");
-    assert_eq!(header.output_folder, "");
-    assert_eq!(header.depends_on, Some("".to_string()));
-}
-
-#[test]
 fn test_parse_multiple_colons() {
     let lines = vec![
         "project: http://example.com:8080/path",
@@ -160,10 +179,14 @@ fn test_parse_multiple_colons() {
 #[test]
 fn test_parse_is_http_variations() {
     let test_cases = vec![
-        ("is-http:", Some(true)),
+        ("is-http: false", Some(false)),
         ("is-http: true", Some(true)),
-        ("is-http: false", Some(true)), // Note: any value sets it to true
-        ("is-http: anything", Some(true)),
+        ("is-http: yes", Some(true)),
+        ("is-http: no", Some(false)),
+        ("is-http: 1", Some(true)),
+        ("is-http: 0", Some(false)),
+        ("is-http: false", Some(false)),
+        ("is-http: true", Some(true)),
     ];
 
     for (line, expected) in test_cases {
@@ -171,6 +194,24 @@ fn test_parse_is_http_variations() {
         assert!(result.is_ok());
         let header = result.unwrap();
         assert_eq!(header.is_http, expected, "Failed for line: {}", line);
+    }
+
+    // check for invalid values
+    let invalid_lines = vec![
+        "is-http: maybe",
+        "is-http: 2",
+        "is-http: unknown",
+    ];
+    for line in invalid_lines {
+        let result = GreqHeader::parse(&vec![line]);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            GreqHeaderError::InvalidHeaderValue { line: err_line } => {
+                assert_eq!(err_line, line);
+            }
+            _ => panic!("Expected InvalidHeaderValue error for line: {}", line),
+        }
     }
 }
 
@@ -239,23 +280,6 @@ fn test_parse_only_whitespace_lines() {
     assert!(result.is_ok());
     let header = result.unwrap();
     assert_eq!(header, GreqHeader::default());
-}
-
-#[test]
-fn test_parse_colon_at_beginning() {
-    let lines = vec![
-        ":value_without_header_name",
-    ];
-
-    let result = GreqHeader::parse(&lines);
-    assert!(result.is_err());
-
-    match result.unwrap_err() {
-        GreqHeaderError::UnknownHeader { header_name } => {
-            assert_eq!(header_name, "");
-        }
-        _ => panic!("Expected UnknownHeader error"),
-    }
 }
 
 #[test]
