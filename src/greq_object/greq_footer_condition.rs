@@ -6,31 +6,42 @@ pub enum ConditionOperator {
     Contains,
     StartsWith,
     EndsWith,
+
+    MatchesRegex,
+
+    // for numerical comparisons
+    GreaterThan,
+    LessThan,
 }
 
 impl Default for ConditionOperator {
     fn default() -> Self { ConditionOperator::Equals }
 }
 
-impl std::fmt::Display for ConditionOperator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConditionOperator::Equals => write!(f, "Equals"),
-            ConditionOperator::Contains => write!(f, "Contains"),
-            ConditionOperator::StartsWith => write!(f, "StartsWith"),
-            ConditionOperator::EndsWith => write!(f, "EndsWith"),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct GreqFooterCondition {
+    // the original line from the footer
+    pub original_line: String,
+
+    // commented out line in the condition
     pub is_comment: bool,
-    pub key: String,
+
+    // the response property to check
+    // e.g. "status-code", "response-body", "header.content-length", etc.
+    pub key: String, 
+
+    // the expected value / regex
     pub value: String,
-    pub is_regex: bool,
+
+    // comparison type
     pub is_case_sensitive: bool,
+
+    // the operator to use for comparison. E.g. "equals", "contains", "starts-with", etc.
     pub operator: ConditionOperator, // "equals", "contains", "starts-with", etc.
+
+    // whether this condition is negated
     pub has_not: bool,
+
+    // whether this condition is part of an OR group (to the previous condition)
     pub has_or: bool,
 }

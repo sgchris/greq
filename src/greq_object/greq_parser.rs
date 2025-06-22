@@ -1,9 +1,9 @@
 
 use crate::constants::{DELIMITER_MIN_LENGTH};
-use crate::greq_object::greq::GreqErrorCodes;
+use crate::greq_object::greq_errors::GreqError;
 
 // Parse the content of a GREQ file into sections based on a delimiter.
-pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], GreqErrorCodes> {
+pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], GreqError> {
     let lines: Vec<&str> = content.lines().collect();
     let delimiter_start = delimiter.to_string().repeat(DELIMITER_MIN_LENGTH);
     
@@ -14,7 +14,7 @@ pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], 
         if line.starts_with(&delimiter_start) {
             part_number += 1;
             if part_number > 2 {
-                return Err(GreqErrorCodes::TooManySections);
+                return Err(GreqError::TooManySections { found: part_number });
             }
         } else {
             sections[part_number].push(*line);
@@ -22,7 +22,7 @@ pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], 
     }
 
     if part_number != 2 {
-        return Err(GreqErrorCodes::TooFewSections);
+        return Err(GreqError::TooFewSections { found: part_number });
     }
 
     Ok(sections)

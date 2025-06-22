@@ -7,6 +7,7 @@ pub struct GreqResponse {
     pub reason_phrase: String,
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
+    pub response_milliseconds: u64,
 }
 
 impl GreqResponse {
@@ -16,6 +17,7 @@ impl GreqResponse {
             reason_phrase: reason_phrase.to_string(),
             headers,
             body,
+            response_milliseconds: 0, // Default to 0, can be set later
         }
     }
 
@@ -55,7 +57,15 @@ impl GreqResponse {
         self.status_code >= 300 && self.status_code < 400
     }
 
-    pub fn is_error(&self) -> bool {
-        self.status_code >= 400
+    pub fn is_client_error(&self) -> bool {
+        self.status_code >= 400 && self.status_code < 500
+    }
+
+    pub fn is_server_error(&self) -> bool {
+        self.status_code >= 500
+    }
+
+    pub fn set_response_time(&mut self, milliseconds: u64) {
+        self.response_milliseconds = milliseconds;
     }
 }

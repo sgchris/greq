@@ -1,108 +1,282 @@
 use crate::greq_object::greq_content::GreqContent;
 use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
-use crate::greq_object::greq_http_request::GreqHttpRequest;
 use crate::greq_object::greq_response::GreqResponse;
-use crate::greq_object::greq_footer_condition::ConditionOperator;
-use crate::greq_object::greq_parser::*;
-use crate::constants::{DEFAULT_DELIMITER_CHAR, NEW_LINE};
+use crate::greq_object::greq_parser::{ extract_delimiter, parse_sections };
+use crate::greq_object::greq_errors::GreqError;
+use crate::greq_object::greq_evaluator::GreqEvaluator;
+use crate::constants::{DEFAULT_DELIMITER_CHAR, DEFAULT_HTTPS_PORT, DEFAULT_HTTP_PORT, NEW_LINE};
 use futures::future::BoxFuture;
-use reqwest::Client;
+use reqwest::{ Client, Method };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
-use regex;
 use std::fs;
+use std::collections::HashMap;
+
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct GreqExecutionResult {
+    pub succeeded: Option<bool>,
+
+    pub response_code: u16,
+    pub response_headers: HashMap<String, String>,
+    pub response_body: String,
+    pub response_milliseconds: u128,
+}
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Greq {
     pub file_contents: String,
+    
     pub sections_delimiter: char,
+
+    // the sections of the Greq file
     pub header: GreqHeader,
     pub content: GreqContent,
     pub footer: GreqFooter,
 }
 
-// possible Greq parsing errors
-#[derive(Debug, PartialEq)]
-pub enum GreqErrorCodes {
-    TooFewSections,
-    TooManySections,
-    SeparatorNotSet,
-
-    ParsingHeaderSectionFailed,
-    ParsingContentSectionFailed,
-    ParsingFooterSectionFailed,
-
-    ReadGreqFileError,
-    HttpError,
-    EnrichmentFailed,
-}
-
-#[derive(Debug)]
-pub struct GreqError {
-    pub code: GreqErrorCodes,
-    pub message: String
-}
-
-impl GreqErrorCodes {
-    pub fn error_message(&self) -> &'static str {
-        match self {
-            GreqErrorCodes::ReadGreqFileError => "Error reading Greq file.",
-            _ => "Unrecognized Greq error",
-        }
-    }
-}
-
-impl GreqError {
-    pub fn new(code: GreqErrorCodes, message: &str) -> Self {
-        Self { code, message: message.to_string() }
-    }
-
-    pub fn from_error_code(code: GreqErrorCodes) -> Self {
-        let error_message = code.error_message();
-        Self::new(code, error_message)
-    }
-}
-
-impl FromStr for Greq {
-    // define a type for the parsing errors
-    type Err = GreqError;
-
-    fn from_str(raw_file_contents: &str) -> Result<Self, Self::Err> {
+impl Greq {
+    // Add a new boxed version of the `execute` function to handle recursion.
+    fn parse(raw_file_contents: &str) -> Result<Self, GreqError> {
         // initialize a new Greq object with the original file contents
         let mut greq = Greq {
             file_contents: raw_file_contents.to_string(),
             ..Default::default()
         };
 
-        // check if a custom delimiter was defined in the file
+        // check if a custom delimiter was defined in the file, using "delimiter" header.
         let delimiter_char = extract_delimiter(raw_file_contents).unwrap_or(DEFAULT_DELIMITER_CHAR);
         greq.sections_delimiter = delimiter_char;
 
         // greq file must have 3 sections. 
         // the header (metadata), content (http raw request), and footer (the evaluation conditions)
-        let sections = parse_sections(raw_file_contents, greq.sections_delimiter)
-            .map_err(|e| GreqError::from_error_code(e))?;
+        let sections = parse_sections(raw_file_contents, greq.sections_delimiter)?;
 
         print!("parsing header...");
         greq.header = GreqHeader::parse(&sections[0])
-            .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingHeaderSectionFailed))?;
+            .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
         println!("done");
 
         print!("parsing content...");
-        greq.content = GreqContent::from_str(&sections[1].join(NEW_LINE))
-            .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingContentSectionFailed))?;
+        greq.content = GreqContent::parse(&sections[1])
+            .map_err(|e| GreqError::ParsingContentSectionFailed { reason: e.to_string() })?;
         // set the default protocol to https
-        greq.content.http_request.is_http = greq.header.is_http.unwrap_or(false);
         println!("done");
 
         print!("parsing footer...");
         greq.footer = GreqFooter::from_str(&sections[2].join(NEW_LINE))
-            .map_err(|_e| GreqError::from_error_code(GreqErrorCodes::ParsingFooterSectionFailed))?;
+            .map_err(|_e| GreqError::ParsingFooterSectionFailed { reason: "Error parsing the footer section".to_string() })?;
         println!("done");
 
+        // update the content with the port
+        greq.content.port = if greq.header.is_http { DEFAULT_HTTP_PORT } else { DEFAULT_HTTPS_PORT };
+
         Ok(greq)
+    }
+
+    // Load a Greq object from a file
+    pub fn from_file(file_path: &str) -> Result<Greq, GreqError> {
+        if !file_path.ends_with(".greq") {
+            return Err(GreqError::ReadGreqFileError { 
+                file_path: file_path.to_string(),
+                reason: "File must have a .greq extension".to_string()
+            });
+        }
+
+        // check that the file exists and is readable
+        if !fs::metadata(file_path).map_err(|e| GreqError::ReadGreqFileError { 
+            file_path: file_path.to_string(),
+            reason: e.to_string() 
+        })?.permissions().readonly() {
+            return Err(GreqError::ReadGreqFileError { 
+                file_path: file_path.to_string(), 
+                reason: "Insufficient permissions to read the file".to_string() 
+            });
+        }
+
+        let file_contents = fs::read_to_string(file_path).map_err(|e| {
+            GreqError::ReadGreqFileError { 
+                file_path: file_path.to_string(), 
+                reason: e.to_string() 
+            }
+        })?;
+
+        // parse the file contents into a Greq object
+        let mut greq = Greq::parse(&file_contents)?;
+
+        // load the base request if specified
+        // "ref" is used to avoid cloning the string unnecessarily
+        if let Some(base_request_path) = greq.header.base_request.clone() {
+            let base_greq = Greq::from_file(&base_request_path)?;
+
+            // merge the base request into the current request
+            greq.enrich_with(&base_greq)
+                .map_err(|e| GreqError::EnrichmentFailed { dependency: base_request_path.to_string(), reason: e.to_string() })?;
+        }
+
+        Ok(greq)
+    }
+
+    /// execute the request and return the evaluation result and the raw response.
+    pub async fn execute(&self) -> Result<GreqExecutionResult, GreqError> {
+        if let Some(ref depends_on_request_path) = self.header.depends_on {
+            // get_response the dependant request
+            let dependant_request = Greq::from_file(depends_on_request_path)?;
+            dependant_request.boxed_execute().await?;
+        }
+
+        let greq_response: GreqResponse = self.get_response().await.map_err(|e| {
+            GreqError::HttpError { message: e }
+        })?;
+
+        let evaluation_result = self.evaluate(&greq_response)?;
+
+        Ok(GreqExecutionResult {
+            succeeded: Some(evaluation_result), 
+            // successful
+            response_code: greq_response.status_code,
+            response_headers: greq_response.headers.clone(),
+            response_body: greq_response.body.unwrap_or_default(),
+            response_milliseconds: 0, // Placeholder for now, can be set later if needed
+        })
+    }
+
+    // send an HTTP request using Reqwest and return the response.
+    pub async fn get_response(&self) -> Result<GreqResponse, String> {
+        // Create a reqwest client
+        let client = Client::new();
+
+        // Set up the request builder based on the method in `Greq`
+        let full_url = self.get_full_url();
+
+        // start building the request
+        println!("sending request to {}.\r\ndetails: {:?}\r\n", full_url, self.content);
+        let reqwest_method = self.content.method.parse::<Method>().map_err(|e| e.to_string())?;
+        let mut request_builder = client.request(reqwest_method, &full_url);
+
+        // Add headers if any
+        for (header_key, header_value) in &self.content.headers {
+            request_builder = request_builder.header(header_key, header_value);
+        }
+
+        // Add the body if it's a POST, PUT, or PATCH request
+        if !self.content.body.is_empty() && self.request_can_send_body() {
+            request_builder = request_builder.body(self.content.body.clone());
+        }
+
+        // Execute the request
+        let start_time = std::time::Instant::now();
+        let raw_response = request_builder.send().await;
+        let elapsed_time = start_time.elapsed().as_millis() as u64;
+
+        // Check for errors in the response
+        let response = raw_response.map_err(|e| e.to_string())?;
+
+        let mut greq_response = GreqResponse {
+            status_code: response.status().as_u16(),
+            reason_phrase: response.status().canonical_reason().unwrap_or("Unknown").to_string(),
+            headers: response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect(),
+            body: None, // Body will be set later
+            response_milliseconds: elapsed_time,
+        };
+
+        // Get the body (if any)
+        greq_response.body = match response.text().await {
+            Ok(body) => Some(body),
+            Err(e) => return Err(format!("Failed to read response body: {}", e)),
+        };
+
+        // Return the GreqResponse
+        Ok(greq_response)
+    }
+
+    fn evaluate(&self, greq_response: &GreqResponse) -> Result<bool, GreqError> {
+        // the final result
+        let mut result = true;
+
+        // "OR" group handling
+        let mut current_or_group: Vec<bool> = Vec::new();
+        let mut current_or_group_failures: Vec<String> = Vec::new();
+        let mut current_or_result;
+
+        // loop through the conditions in the footer and evaluate one-by-one
+        for condition in &self.footer.conditions {
+            // check if OR group ended
+            if !condition.has_or && !current_or_group.is_empty() {
+                current_or_result = current_or_group.iter().any(|&x| x);
+                if current_or_result == false {
+                    // IR group failed, return
+                    return Err(GreqError::ConditionEvaluationFailed {
+                        reason: current_or_group_failures.join(NEW_LINE),
+                    });
+                } else {
+                    current_or_group.clear();
+                }
+            }
+
+            // condition evaluation result
+            let condition_result = GreqEvaluator::evaluate(&greq_response, condition);
+
+            // check if the condition is part of an OR group
+            if condition.has_or {
+                // save the failed condition for later reporting
+                if condition_result == false {
+                    current_or_group_failures.push(format!("Condition failed: {:?}", condition));
+                }
+
+                current_or_group.push(condition_result);
+            } else {
+                // if the condition is not part of an OR group, evaluate it directly
+                if condition_result == false {
+                    return Err(GreqError::ConditionEvaluationFailed {
+                        reason: format!("Condition failed: {:?}", condition),
+                    });
+                }
+            }
+        }
+
+        // Handle any remaining OR conditions
+        if !current_or_group.is_empty() {
+            current_or_result = current_or_group.iter().any(|&x| x);
+            if !current_or_result {
+                result = false;
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Execute the request and return a boxed future.
+    /// This is useful for recursive calls where the return type needs to be boxed.
+    fn boxed_execute(&self) -> BoxFuture<'_, Result<GreqExecutionResult, GreqError>> {
+        Box::pin(self.execute())
+    }
+
+    /// Get the full URL of the request, including protocol, host, custom port if needed, and URI.
+    fn get_full_url(&self) -> String {
+        let protocol = if self.header.is_http { "http" } else { "https" };
+        let host = &self.content.hostname;
+
+        // add the port if it's not the default one
+        let port: String = match self.content.port {
+            DEFAULT_HTTP_PORT | DEFAULT_HTTPS_PORT => "".to_string(),
+            _ => format!(":{}", self.content.port),
+        };
+
+        let uri = &self.content.uri;
+
+        format!("{}://{}{}{}", protocol, host, port, uri)
+    }
+
+    /// Check if the request can send a body based on the HTTP method.
+    #[inline]
+    fn request_can_send_body(&self) -> bool {
+        matches!(self.content.method.as_str(), "POST" | "PUT" | "PATCH")
     }
 }
 
@@ -119,256 +293,5 @@ impl EnrichWith for Greq {
         self.footer.enrich_with(&another_object.footer)?;
 
         Ok(())
-    }
-}
-
-impl Greq {
-    // Add a new boxed version of the `execute` function to handle recursion.
-    fn boxed_execute(&self) -> BoxFuture<'_, Result<(Option<bool>, String), GreqError>> {
-        Box::pin(self.execute())
-    }
-
-    /// execute the request and return the evaluation result and the raw response.
-    pub async fn execute(&self) -> Result<(Option<bool>, String), GreqError> {
-        if let Some(ref depends_on_request_path) = self.header.depends_on {
-            // get_response the dependant request
-            let dependant_request = Greq::from_file(depends_on_request_path)?;
-            dependant_request.boxed_execute().await?;
-        }
-
-        let result = self.get_response().await.map_err(|e| {
-            GreqError::new(GreqErrorCodes::HttpError, &e)
-        })?;
-
-        let evaluation_result = match self.evaluate().await {
-            Ok(res) => Some(res),
-            Err(e) => {
-                println!("Error evaluating conditions: {}", e);
-                return Err(GreqError::new(GreqErrorCodes::HttpError, &e));
-            }
-        };
-
-        Ok((evaluation_result, result.body.unwrap()))
-    }
-
-    pub async fn get_response(&self) -> Result<GreqResponse, String> {
-        // Create a reqwest client
-        let client = Client::new();
-
-        // Set up the request builder based on the method in `Greq`
-        let full_url = self.content.http_request.get_full_url();
-        println!(
-            "sending request to {}.\r\nself.content.http_request: {:?}\r\n",
-            full_url, self.content.http_request
-        );
-        let request_builder = match self.content.http_request.method.to_lowercase().as_str() {
-            "get" => client.get(full_url),
-            "post" => client.post(full_url),
-            "put" => client.put(full_url),
-            "delete" => client.delete(full_url),
-            "head" => client.head(full_url),
-            "patch" => client.patch(full_url),
-            _ => return Err("Unsupported HTTP method".to_string()),
-        };
-
-        // Add headers if any
-        let mut request_builder = request_builder;
-        for (key, value) in &self.content.http_request.headers {
-            request_builder = request_builder.header(key, value);
-        }
-
-        // Add the body if it's a POST, PUT, or PATCH request
-        if !self.content.http_request.content.is_empty() {
-            request_builder = request_builder.body(self.content.http_request.content.clone());
-        }
-
-        // Execute the request
-        let response = request_builder.send().await.map_err(|e| e.to_string())?;
-
-        // Parse the response
-        let status_code = response.status().as_u16();
-        let reason_phrase = response
-            .status()
-            .canonical_reason()
-            .unwrap_or("Unknown")
-            .to_string();
-
-        // Collect headers into a HashMap
-        let headers = response
-            .headers()
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
-            .collect();
-
-        // Get the body (if any)
-        let body = response.text().await.map_err(|e| e.to_string())?;
-
-        // Return the GreqResponse
-        Ok(GreqResponse {
-            status_code,
-            reason_phrase,
-            headers,
-            body: Some(body.clone()),
-        })
-    }
-
-    // Load a Greq object from a file
-    pub fn from_file(file_path: &str) -> Result<Greq, GreqError> {
-        let file_contents = fs::read_to_string(file_path).map_err(|e| {
-            GreqError::new(GreqErrorCodes::ReadGreqFileError, &format!("Failed to read file {}: {}", file_path, e))
-        })?;
-
-        // parse the file contents into a Greq object
-        let mut greq = Greq::from_str(&file_contents)?;
-
-        // load the base request if specified
-        // "ref" is used to avoid cloning the string unnecessarily
-        if let Some(ref base_request_path) = greq.header.base_request {
-            let base_greq = Greq::from_file(base_request_path)?;
-
-            // merge the base request into the current request
-            greq.enrich_with(&base_greq).map_err(|e| GreqError::new(GreqErrorCodes::EnrichmentFailed, &e))?;
-        }
-
-        Ok(greq)
-    }
-
-    pub fn get_http_request(&self, base_request: Option<Greq>) -> Result<&GreqHttpRequest, String> {
-        // check that base request is provided
-        if self.header.base_request.is_some() && !base_request.is_some() {
-            return Err("base_request isn't provided".to_string());
-        }
-
-        Ok(&self.content.http_request)
-    }
-
-    async fn evaluate(&self) -> Result<bool, String> {
-        let mut result = true;
-        let mut current_or_group = Vec::new();
-        let mut current_or_result = false;
-        let response = self.get_response().await?;
-        let status_code = response.status_code;
-        let response_body_owned = response.body.clone().unwrap_or_else(String::new);
-        let response_body = &response_body_owned;
-        let headers = &response.headers;
-
-        for condition in &self.footer.conditions {
-            let condition_result = match condition.key.as_str() {
-                "status-code" => {
-                    let expected = condition.value.parse::<u16>().map_err(|e| format!("Invalid status code: {}", e))?;
-                    match condition.operator {
-                        ConditionOperator::Equals => status_code == expected,
-                        _ => return Err("Only equals operator is supported for status-code".to_string()),
-                    }
-                }
-                "response-content" => {
-                    let expected = condition.value.trim_matches('"');
-                    match condition.operator {
-                        ConditionOperator::Equals => response_body == expected,
-                        ConditionOperator::Contains => {
-                            if condition.is_regex {
-                                let re = regex::Regex::new(expected).map_err(|e| format!("Invalid regex: {}", e))?;
-                                re.is_match(response_body)
-                            } else {
-                                if condition.is_case_sensitive {
-                                    response_body.contains(expected)
-                                } else {
-                                    response_body.to_lowercase().contains(&expected.to_lowercase())
-                                }
-                            }
-                        }
-                        ConditionOperator::StartsWith => {
-                            if condition.is_case_sensitive {
-                                response_body.starts_with(expected)
-                            } else {
-                                response_body.to_lowercase().starts_with(&expected.to_lowercase())
-                            }
-                        }
-                        ConditionOperator::EndsWith => {
-                            if condition.is_case_sensitive {
-                                response_body.ends_with(expected)
-                            } else {
-                                response_body.to_lowercase().ends_with(&expected.to_lowercase())
-                            }
-                        }
-                    }
-                }
-                header_name => {
-                    let header_value = headers.get(header_name).map(|v| v.as_str()).unwrap_or("");
-                    let expected = condition.value.trim_matches('"');
-                    match condition.operator {
-                        ConditionOperator::Equals => header_value == expected,
-                        ConditionOperator::Contains => {
-                            if condition.is_regex {
-                                let re = regex::Regex::new(expected).map_err(|e| format!("Invalid regex: {}", e))?;
-                                re.is_match(header_value)
-                            } else {
-                                if condition.is_case_sensitive {
-                                    header_value.contains(expected)
-                                } else {
-                                    header_value.to_lowercase().contains(&expected.to_lowercase())
-                                }
-                            }
-                        }
-                        ConditionOperator::StartsWith => {
-                            if condition.is_case_sensitive {
-                                header_value.starts_with(expected)
-                            } else {
-                                header_value.to_lowercase().starts_with(&expected.to_lowercase())
-                            }
-                        }
-                        ConditionOperator::EndsWith => {
-                            if condition.is_case_sensitive {
-                                header_value.ends_with(expected)
-                            } else {
-                                header_value.to_lowercase().ends_with(&expected.to_lowercase())
-                            }
-                        }
-                    }
-                }
-            };
-
-            let final_result = if condition.has_not {
-                !condition_result
-            } else {
-                condition_result
-            };
-
-            if condition.has_or {
-                current_or_group.push(final_result);
-            } else {
-                if !current_or_group.is_empty() {
-                    current_or_result = current_or_group.iter().any(|&x| x);
-                    current_or_group.clear();
-                }
-                if !current_or_result {
-                    result = false;
-                    break;
-                }
-                result &= final_result;
-            }
-        }
-
-        // Handle any remaining OR conditions
-        if !current_or_group.is_empty() {
-            current_or_result = current_or_group.iter().any(|&x| x);
-            if !current_or_result {
-                result = false;
-            }
-        }
-
-        Ok(result)
-    }
-
-    pub fn header(&self) -> &GreqHeader {
-        &self.header
-    }
-
-    pub fn content(&self) -> &GreqContent {
-        &self.content
-    }
-
-    pub fn footer(&self) -> &GreqFooter {
-        &self.footer
     }
 }

@@ -48,20 +48,17 @@ my-custom-header: my-value
 status-code equals: 200
 or status-code: 201
 not status-code: 500
-response_content equals: "full response content"
-response_content contains: "some content in response"
-headers.custom_header contains regex: ^response\s+?start.*the end\.$
-or response_content contains: "another string. The 'or' refers to the previous 'contains'"
-not response_content ontains: "unwanted string"
-and not contains: "another unwanted string"
-header exists: "custom-header-name"
-header equals: "custom-header-name", "some custom header value"
-header contains: "custom-header-name", "some sub-string"
-header contains regex: "custom-header-name", "some.*reg[ex]+"
-response_content starts-with: "response start"
-or response_content starts-with: "another response start"
-not response_content starts-with: "unwanted response start"
-response_content ends-with case-sensitive: "the end."
+response-body equals: full response content
+response-body contains: some content in response
+headers.custom-header matches-regex: ^response\s+?start.*the end\.$
+or response-body contains: another string. The 'or' refers to the previous 'contains'"
+not response-body ontains: unwanted string"
+and not contains: another unwanted string"
+header exists: custom-header-name
+response-body starts-with: response start
+or response-body starts-with: another response start
+not response-body starts-with: unwanted response start
+response-body ends-with case-sensitive: the end.
 -- comment line here
 ```
 

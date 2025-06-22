@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
 #[derive(Debug, PartialEq, Error)]
 pub enum GreqHeaderError {
@@ -15,20 +16,18 @@ pub enum GreqHeaderError {
     InvalidHeaderValue { line: String },
 }
 
-#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct GreqHeader {
-    pub original_string: String,
-
     // the delimiter character to separate sections. Default '='.
     // (This header is used by the parent Greq object to parse the file.)
     pub delimiter: char,
 
-    pub project: String,          // the name of the project. Will be implemented.
-    pub output_folder: String,    // path to a destination folder. Default current.
-    pub output_file_name: String, // output filename. default current file name with ".response" extension.
+    pub project: Option<String>,          // the name of the project. Will be implemented.
+    pub output_folder: Option<String>,    // path to a destination folder. Default current.
+    pub output_file_name: Option<String>, // output filename. default current file name with ".response" extension.
 
     // http and not https request
-    pub is_http: Option<bool>,  
+    pub is_http: bool,  
 
     // the request that this file extends
     pub base_request: Option<String>,
@@ -37,7 +36,23 @@ pub struct GreqHeader {
     pub depends_on: Option<String>,
 }
 
+// override some default values
+impl Default for GreqHeader {
+    fn default() -> Self {
+        GreqHeader {
+            delimiter: '=',
+            is_http: false,
+            project: None,           // Option<T> defaults to None
+            output_folder: None,
+            output_file_name: None,
+            base_request: None,
+            depends_on: None,
+        }
+    }
+}
+
 impl GreqHeader {
+    // parse the lines that are related to the header of the request
     pub fn parse(header_lines: &Vec<&str>) -> Result<GreqHeader, GreqHeaderError> {
         // initialize the object
         let mut greq_header = GreqHeader::default();
@@ -51,14 +66,11 @@ impl GreqHeader {
                 continue;
             }
 
-            // check if the line contains a colon
-            if !line.contains(':') {
-                return Err(GreqHeaderError::LineHasNoColonSign { line: line.to_string() });
-            }
-
-            let (header_name, header_value) = line.split_once(":").unwrap();
-            let header_name = header_name.trim();
-            let header_value = header_value.trim();
+            // Ensure the line contains a colon
+            let (header_name, header_value) = line
+                .split_once(":")
+                .map(|(n, v)| (n.trim(), v.trim()))
+                .ok_or_else(|| GreqHeaderError::LineHasNoColonSign { line: line.to_string() })?;
 
             // check if the header name is empty
             if header_name.is_empty() {
@@ -71,27 +83,34 @@ impl GreqHeader {
             }
 
             match header_name.to_lowercase().as_str() {
-                "project" => {
-                    greq_header.project = header_value.to_string();
+                "delimiter" => {
+                    if header_value.len() != 1 {
+                        return Err(GreqHeaderError::InvalidHeaderValue { line: line.to_string() });
+                    }
+
+                    greq_header.delimiter = header_value.chars().next().unwrap();
                 }
-                "depends-on" => {
-                    greq_header.depends_on = Some(header_value.to_string());
+                "project" => {
+                    greq_header.project = Some(header_value.to_string());
+                }
+                "output-folder" => {
+                    greq_header.output_folder = Some(header_value.to_string());
+                }
+                "output-file-name" => {
+                    greq_header.output_file_name = Some(header_value.to_string());
+                }
+                "is-http" => {
+                    greq_header.is_http = match header_value.to_lowercase().as_str() {
+                        "true" | "yes" | "1" => true,
+                        "false" | "no" | "0" => false,
+                        _ => return Err(GreqHeaderError::InvalidHeaderValue { line: line.to_string() }),
+                    };
                 }
                 "base-request" => {
                     greq_header.base_request = Some(header_value.to_string());
                 }
-                "output-folder" => {
-                    greq_header.output_folder = header_value.to_string();
-                }
-                "output-file-name" => {
-                    greq_header.output_file_name = header_value.to_string();
-                }
-                "is-http" => {
-                    greq_header.is_http = match header_value.to_lowercase().as_str() {
-                        "true" | "yes" | "1" => Some(true),
-                        "false" | "no" | "0" => Some(false),
-                        _ => return Err(GreqHeaderError::InvalidHeaderValue { line: line.to_string() }),
-                    };
+                "depends-on" => {
+                    greq_header.depends_on = Some(header_value.to_string());
                 }
                 _ => {
                     return Err(GreqHeaderError::UnknownHeader { header_name: header_name.to_string() });
@@ -101,41 +120,37 @@ impl GreqHeader {
 
         Ok(greq_header)
     }
+}
 
+impl EnrichWith for GreqHeader {
     // Enrich values from another_object into self
     // Used to fill in missing values in self with values from another_object
-    pub fn enrich_with(&mut self, another_object: &Self) -> Result<(), String>
+    fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
+    where
+        Self: Sized,
     {
         // Override values in self with values from another_object if they are not empty
-        if self.project.is_empty() && !another_object.project.is_empty() {
-            self.project = another_object.project.to_string();
+        if self.project.is_none() && object_to_merge.project.is_some() {
+            self.project = object_to_merge.project.clone();
         }
-        if self.output_folder.is_empty() && !another_object.output_folder.is_empty() {
-            self.output_folder = another_object.output_folder.to_string();
+        if self.output_folder.is_none() && object_to_merge.output_folder.is_some() {
+            self.output_folder = object_to_merge.output_folder.clone();
         }
-        if self.output_file_name.is_empty() && !another_object.output_file_name.is_empty() {
-            self.output_file_name = another_object.output_file_name.to_string();
+        if self.output_file_name.is_none() && object_to_merge.output_file_name.is_some() {
+            self.output_file_name = object_to_merge.output_file_name.clone();
         }
 
         // Set is_http if not set in self
-        if self.is_http.is_none() {
-            if let Some(is_http_value) = another_object.is_http {
-                self.is_http = Some(is_http_value);
-            }
-        }
+        self.is_http = object_to_merge.is_http;
 
         // Set base_request if not set in self
-        if self.base_request.is_none() {
-            if another_object.base_request.is_some() {
-                self.base_request = another_object.base_request.clone(); // Option can use clone
-            }
+        if self.base_request.is_none() && object_to_merge.base_request.is_some() {
+            self.base_request = object_to_merge.base_request.clone(); // Option can use clone
         }
 
         // Set depends_on if not set in self
-        if self.depends_on.is_none() {
-            if another_object.depends_on.is_some() {
-                self.depends_on = another_object.depends_on.clone(); // Option can use clone
-            }
+        if self.depends_on.is_none() && object_to_merge.depends_on.is_some() {
+            self.depends_on = object_to_merge.depends_on.clone(); // Option can use clone
         }
 
         Ok(())

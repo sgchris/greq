@@ -2,6 +2,7 @@ use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCon
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use crate::constants::FOOTER_CONDITION_HEADERS_PREFIX;
 
 /// The footer element containing all the test conditions
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -158,8 +159,8 @@ impl GreqFooter {
                 "status-code" => {
                     condition_line.key = "status-code".to_string();
                 }
-                "response-content" => {
-                    condition_line.key = "response-content".to_string();
+                "response-body" => {
+                    condition_line.key = "response-body".to_string();
                 }
 
                 // the operator
@@ -177,15 +178,12 @@ impl GreqFooter {
                 }
 
                 // the suffix
-                "regex" => {
-                    condition_line.is_regex = true;
-                }
                 "case-sensitive" => {
                     condition_line.is_case_sensitive = true;
                 }
 
                 // check the headers condition (e.g. "headers.content-type: application/json")
-                key if key.starts_with("headers.") => {
+                key if key.starts_with(FOOTER_CONDITION_HEADERS_PREFIX) => {
                     if let Some((_h_prefix, header_name)) = key.split_once(".") {
                         // not allowed to use "." in the header name. E.g. "headers.my.header"
                         if header_name.trim().is_empty() || header_name.contains(".") {

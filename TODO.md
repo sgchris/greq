@@ -12,3 +12,14 @@
 4. avoid dependency loop (base request)
 
 5. Add standard logger instead of print statements.
+
+6. Update the content port when "is-http" is set to true in the request. By default it's 443
+
+7. add 'merge-json-body' boolean header. Default to false.
+In case when 'base-request' is set, the body (if it's a JSON) can be either overwritten or merged with the base request body.
+
+8. Add regex support for 'equals'
+
+9. Add support for using response of the dependant request in the current request.
+
+10. Convert greq_response.status_code to StatusCode enum.
