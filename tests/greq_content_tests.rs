@@ -1,5 +1,4 @@
 use greq::greq_object::greq_content::GreqContent;
-use greq::greq_object::greq_http_request::GreqHttpRequest;
 use greq::greq_object::traits::enrich_with_trait::EnrichWith;
 use std::collections::HashMap;
 
