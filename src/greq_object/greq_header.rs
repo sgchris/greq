@@ -16,7 +16,7 @@ pub enum GreqHeaderError {
     InvalidHeaderValue { line: String },
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GreqHeader {
     // the delimiter character to separate sections. Default '='.
     // (This header is used by the parent Greq object to parse the file.)
@@ -139,9 +139,6 @@ impl EnrichWith for GreqHeader {
         if self.output_file_name.is_none() && object_to_merge.output_file_name.is_some() {
             self.output_file_name = object_to_merge.output_file_name.clone();
         }
-
-        // Set is_http if not set in self
-        self.is_http = object_to_merge.is_http;
 
         // Set base_request if not set in self
         if self.base_request.is_none() && object_to_merge.base_request.is_some() {

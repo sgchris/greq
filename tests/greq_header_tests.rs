@@ -1,4 +1,5 @@
 use greq::greq_object::greq_header::{GreqHeader, GreqHeaderError};
+use greq::greq_object::traits::enrich_with_trait::EnrichWith;
 
 #[test]
 fn test_parse_empty_header() {
@@ -59,12 +60,12 @@ fn test_parse_valid_complete_header() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "MyProject");
-    assert_eq!(header.output_folder, "/tmp/responses");
-    assert_eq!(header.output_file_name, "test.response");
+    assert_eq!(header.project, Some("MyProject".to_string()));
+    assert_eq!(header.output_folder, Some("/tmp/responses".to_string()));
+    assert_eq!(header.output_file_name, Some("test.response".to_string()));
     assert_eq!(header.depends_on, Some("auth_request".to_string()));
     assert_eq!(header.base_request, Some("base.greq".to_string()));
-    assert_eq!(header.is_http, Some(true));
+    assert_eq!(header.is_http, true);
 }
 
 #[test]
@@ -79,9 +80,9 @@ fn test_parse_with_whitespace() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "MyProject");
-    assert_eq!(header.output_folder, "/tmp/responses");
-    assert_eq!(header.output_file_name, "test.response");
+    assert_eq!(header.project, Some("MyProject".to_string()));
+    assert_eq!(header.output_folder, Some("/tmp/responses".to_string()));
+    assert_eq!(header.output_file_name, Some("test.response".to_string()));
 }
 
 #[test]
@@ -99,8 +100,8 @@ fn test_parse_with_empty_lines() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "MyProject");
-    assert_eq!(header.output_folder, "/tmp");
+    assert_eq!(header.project, Some("MyProject".to_string()));
+    assert_eq!(header.output_folder, Some("/tmp".to_string()));
 }
 
 #[test]
@@ -117,11 +118,11 @@ fn test_parse_case_insensitive_headers() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "MyProject");
-    assert_eq!(header.output_folder, "/tmp");
+    assert_eq!(header.project, Some("MyProject".to_string()));
+    assert_eq!(header.output_folder, Some("/tmp".to_string()));
     assert_eq!(header.depends_on, Some("auth".to_string()));
     assert_eq!(header.base_request, Some("base.greq".to_string()));
-    assert_eq!(header.is_http, Some(true));
+    assert_eq!(header.is_http, true);
 }
 
 #[test]
@@ -172,21 +173,21 @@ fn test_parse_multiple_colons() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "http://example.com:8080/path");
-    assert_eq!(header.output_folder, "C:\\Users\\test:folder");
+    assert_eq!(header.project, Some("http://example.com:8080/path".to_string()));
+    assert_eq!(header.output_folder, Some("C:\\Users\\test:folder".to_string()));
 }
 
 #[test]
 fn test_parse_is_http_variations() {
     let test_cases = vec![
-        ("is-http: false", Some(false)),
-        ("is-http: true", Some(true)),
-        ("is-http: yes", Some(true)),
-        ("is-http: no", Some(false)),
-        ("is-http: 1", Some(true)),
-        ("is-http: 0", Some(false)),
-        ("is-http: false", Some(false)),
-        ("is-http: true", Some(true)),
+        ("is-http: false", false),
+        ("is-http: true", true),
+        ("is-http: yes", true),
+        ("is-http: no", false),
+        ("is-http: 1", true),
+        ("is-http: 0", false),
+        ("is-http: false", false),
+        ("is-http: true", true),
     ];
 
     for (line, expected) in test_cases {
@@ -229,8 +230,8 @@ fn test_parse_duplicate_headers() {
     let header = result.unwrap();
 
     // Should use the last value
-    assert_eq!(header.project, "SecondProject");
-    assert_eq!(header.output_folder, "/tmp2");
+    assert_eq!(header.project, Some("SecondProject".to_string()));
+    assert_eq!(header.output_folder, Some("/tmp2".to_string()));
 }
 
 #[test]
@@ -245,8 +246,8 @@ fn test_parse_special_characters() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "My-Project_123!");
-    assert_eq!(header.output_folder, "/path/with spaces/and-symbols@#$");
+    assert_eq!(header.project, Some("My-Project_123!".to_string()));
+    assert_eq!(header.output_folder, Some("/path/with spaces/and-symbols@#$".to_string()));
     assert_eq!(header.depends_on, Some("request:with:colons".to_string()));
 }
 
@@ -262,8 +263,8 @@ fn test_parse_unicode_characters() {
     assert!(result.is_ok());
     let header = result.unwrap();
 
-    assert_eq!(header.project, "プロジェクト名");
-    assert_eq!(header.output_folder, "/路径/测试");
+    assert_eq!(header.project, Some("プロジェクト名".to_string()));
+    assert_eq!(header.output_folder, Some("/路径/测试".to_string()));
     assert_eq!(header.depends_on, Some("αβγ_request".to_string()));
 }
 
@@ -310,10 +311,10 @@ fn test_enrich_with_empty_self_filled_other() {
     let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
-    assert_eq!(self_header.project, "test_project");
-    assert_eq!(self_header.output_folder, "/test/output");
-    assert_eq!(self_header.output_file_name, "test.response");
-    assert_eq!(self_header.is_http, Some(true));
+    assert_eq!(self_header.project, Some("test_project".to_string()));
+    assert_eq!(self_header.output_folder, Some("/test/output".to_string()));
+    assert_eq!(self_header.output_file_name, Some("test.response".to_string()));
+    assert_eq!(self_header.is_http, false); // default value
     assert_eq!(self_header.base_request, Some("base.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("dependency.greq".to_string()));
 }
@@ -335,10 +336,10 @@ fn test_enrich_with_filled_self_empty_other() {
     assert!(result.is_ok());
 
     // Self values should remain unchanged
-    assert_eq!(self_header.project, "self_project");
-    assert_eq!(self_header.output_folder, "/self/output");
-    assert_eq!(self_header.output_file_name, "self.response");
-    assert_eq!(self_header.is_http, Some(false));
+    assert_eq!(self_header.project, Some("self_project".to_string()));
+    assert_eq!(self_header.output_folder, Some("/self/output".to_string()));
+    assert_eq!(self_header.output_file_name, Some("self.response".to_string()));
+    assert_eq!(self_header.is_http, false);
     assert_eq!(self_header.base_request, Some("self_base.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("self_dependency.greq".to_string()));
 }
@@ -369,9 +370,9 @@ fn test_enrich_with_both_filled_self_takes_precedence() {
     assert!(result.is_ok());
 
     // Self values should remain unchanged (precedence)
-    assert_eq!(self_header.project, "self_project");
-    assert_eq!(self_header.output_folder, "/self/output");
-    assert_eq!(self_header.output_file_name, "self.response");
+    assert_eq!(self_header.project, Some("self_project".to_string()));
+    assert_eq!(self_header.output_folder, Some("/self/output".to_string()));
+    assert_eq!(self_header.output_file_name, Some("self.response".to_string()));
     assert_eq!(self_header.is_http, false);
     assert_eq!(self_header.base_request, Some("self_base.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("self_dependency.greq".to_string()));
@@ -401,10 +402,10 @@ fn test_enrich_with_partial_merge() {
     let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
-    assert_eq!(self_header.project, "self_project"); // unchanged (has value)
-    assert_eq!(self_header.output_folder, "/other/output"); // merged (was empty)
-    assert_eq!(self_header.output_file_name, "self.response"); // unchanged (has value)
-    assert_eq!(self_header.is_http, Some(true)); // merged (was None)
+    assert_eq!(self_header.project, Some("self_project".to_string())); // unchanged (has value)
+    assert_eq!(self_header.output_folder, Some("/other/output".to_string())); // merged (was empty)
+    assert_eq!(self_header.output_file_name, Some("self.response".to_string())); // unchanged (has value)
+    assert_eq!(self_header.is_http, false); // merged (was None)
     assert_eq!(self_header.base_request, Some("self_base.greq".to_string())); // unchanged (has value)
     assert_eq!(self_header.depends_on, Some("other_dependency.greq".to_string())); // merged (was None)
 }
@@ -412,7 +413,7 @@ fn test_enrich_with_partial_merge() {
 #[test]
 fn test_enrich_with_option_fields_none_to_some() {
     let mut self_header = GreqHeader {
-        is_http: None,
+        is_http: false,
         base_request: None,
         depends_on: None,
         ..Default::default()
@@ -427,7 +428,7 @@ fn test_enrich_with_option_fields_none_to_some() {
     let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
-    assert_eq!(self_header.is_http, true);
+    assert_eq!(self_header.is_http, false); // remains unchanged
     assert_eq!(self_header.base_request, Some("base.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("dep.greq".to_string()));
 }
@@ -441,7 +442,7 @@ fn test_enrich_with_option_fields_some_to_none() {
         ..Default::default()
     };
     let other_header = GreqHeader {
-        is_http: None,
+        is_http: true,
         base_request: None,
         depends_on: None,
         ..Default::default()
@@ -451,7 +452,7 @@ fn test_enrich_with_option_fields_some_to_none() {
     assert!(result.is_ok());
 
     // Self values should remain unchanged
-    assert_eq!(self_header.is_http, Some(false));
+    assert_eq!(self_header.is_http, false); // remains unchanged
     assert_eq!(self_header.base_request, Some("self_base.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("self_dep.greq".to_string()));
 }
@@ -459,13 +460,13 @@ fn test_enrich_with_option_fields_some_to_none() {
 #[test]
 fn test_enrich_with_both_none_remains_none() {
     let mut self_header = GreqHeader {
-        is_http: None,
+        is_http: false,
         base_request: None,
         depends_on: None,
         ..Default::default()
     };
     let other_header = GreqHeader {
-        is_http: None,
+        is_http: false,
         base_request: None,
         depends_on: None,
         ..Default::default()
@@ -474,7 +475,7 @@ fn test_enrich_with_both_none_remains_none() {
     let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
-    assert_eq!(self_header.is_http, None);
+    assert_eq!(self_header.is_http, false);
     assert_eq!(self_header.base_request, None);
     assert_eq!(self_header.depends_on, None);
 }
@@ -497,10 +498,10 @@ fn test_enrich_with_identical_objects() {
     assert!(result.is_ok());
 
     // Should remain identical
-    assert_eq!(self_header.project, "project");
-    assert_eq!(self_header.output_folder, "/output");
-    assert_eq!(self_header.output_file_name, "test.response");
-    assert_eq!(self_header.is_http, Some(true));
+    assert_eq!(self_header.project, Some("project".to_string()));
+    assert_eq!(self_header.output_folder, Some("/output".to_string()));
+    assert_eq!(self_header.output_file_name, Some("test.response".to_string()));
+    assert_eq!(self_header.is_http, true);
     assert_eq!(self_header.base_request, Some("base.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("dep.greq".to_string()));
 }
@@ -520,7 +521,7 @@ fn test_enrich_with_both_empty() {
 #[test]
 fn test_enrich_with_whitespace_handling() {
     let mut self_header = GreqHeader {
-        project: Some("".to_string()),
+        project: None,
         output_folder: Some("   ".to_string()), // whitespace only
         ..Default::default()
     };
@@ -533,18 +534,18 @@ fn test_enrich_with_whitespace_handling() {
     let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
-    assert_eq!(self_header.project, "other_project"); // merged (was empty)
+    assert_eq!(self_header.project, Some("other_project".to_string())); // merged (was empty)
     // Note: whitespace-only strings are not considered empty by is_empty()
-    assert_eq!(self_header.output_folder, "   "); // not merged (has whitespace)
+    assert_eq!(self_header.output_folder, Some("   ".to_string())); // not merged (has whitespace)
 }
 
 #[test]
 fn test_enrich_with_special_characters() {
     let mut self_header = GreqHeader::default();
     let other_header = GreqHeader {
-        project: "project-with-dashes".to_string(),
-        output_folder: "/path/with spaces/and-dashes".to_string(),
-        output_file_name: "file_name.with.dots".to_string(),
+        project: Some("project-with-dashes".to_string()),
+        output_folder: Some("/path/with spaces/and-dashes".to_string()),
+        output_file_name: Some("file_name.with.dots".to_string()),
         base_request: Some("base-request.greq".to_string()),
         depends_on: Some("dependency_file.greq".to_string()),
         ..Default::default()
@@ -553,9 +554,9 @@ fn test_enrich_with_special_characters() {
     let result = self_header.enrich_with(&other_header);
     assert!(result.is_ok());
 
-    assert_eq!(self_header.project, "project-with-dashes");
-    assert_eq!(self_header.output_folder, "/path/with spaces/and-dashes");
-    assert_eq!(self_header.output_file_name, "file_name.with.dots");
+    assert_eq!(self_header.project, Some("project-with-dashes".to_string()));
+    assert_eq!(self_header.output_folder, Some("/path/with spaces/and-dashes".to_string()));
+    assert_eq!(self_header.output_file_name, Some("file_name.with.dots".to_string()));
     assert_eq!(self_header.base_request, Some("base-request.greq".to_string()));
     assert_eq!(self_header.depends_on, Some("dependency_file.greq".to_string()));
 }
@@ -578,6 +579,6 @@ fn test_enrich_with_preserves_original_string_and_delimiter() {
     // original_string and delimiter should not be affected by merge
     assert_eq!(self_header.delimiter, '#');
     // but other fields should merge
-    assert_eq!(self_header.project, "other_project");
+    assert_eq!(self_header.project, Some("other_project".to_string()));
 }
 
