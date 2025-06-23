@@ -114,15 +114,15 @@ fn test_parse_sections_whitespace_handling() {
     }; 
 
     assert_eq!(result[0], vec!["line1", "", "line2"]);
-    assert_eq!(result[1], vec!["", "section2", ""]);
+    assert_eq!(result[1], vec!["section2", ""]);
     assert_eq!(result[2], vec!["section3"]);
 
     // Test with only whitespace lines
     let content = format!("   \n\t\n{}\n  \n{}\n\t  ", delimiter_str, delimiter_str);
     let result = parse_sections(&content, DEFAULT_DELIMITER_CHAR).unwrap();
-    assert_eq!(result[0], vec!["   ", "\t"]);
-    assert_eq!(result[1], vec!["  "]);
-    assert_eq!(result[2], vec!["\t  "]);
+    assert!(result[0].is_empty());
+    assert!(result[1].is_empty());
+    assert!(result[2].is_empty());
 }
 
 #[test]
@@ -136,12 +136,11 @@ fn test_parse_sections_delimiter_variations() {
     assert_eq!(result[2], vec!["section3"]);
 
     // Test with delimiter that has extra characters after
+    // It should fail
     let delimiter_with_extra = format!("{}extra text", "#".repeat(DELIMITER_MIN_LENGTH));
     let content = format!("section1\n{}\nsection2\n{}\nsection3", delimiter_with_extra, delimiter_with_extra);
-    let result = parse_sections(&content, '#').unwrap();
-    assert_eq!(result[0], vec!["section1"]);
-    assert_eq!(result[1], vec!["section2"]);
-    assert_eq!(result[2], vec!["section3"]);
+    let result = parse_sections(&content, '#');
+    assert_eq!(result, Err(GreqError::TooFewSections { found: 1 }));
 }
 
 #[test]
