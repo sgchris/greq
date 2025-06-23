@@ -1,6 +1,6 @@
 use greq::constants::{DEFAULT_DELIMITER_CHAR, DELIMITER_MIN_LENGTH};
-use greq::greq_object::greq::GreqErrorCodes;
 use greq::greq_object::greq_parser::{extract_delimiter, parse_sections};
+use greq::greq_object::greq_errors::GreqError;
 
 
 #[test]
@@ -150,16 +150,16 @@ fn test_parse_sections_error_too_few_sections() {
 
     // Test with no delimiters
     let result = parse_sections("just one section", '#');
-    assert_eq!(result, Err(GreqErrorCodes::TooFewSections));
+    assert_eq!(result, Err(GreqError::TooFewSections { found: 1 }));
 
     // Test with only one delimiter
     let content = format!("section1\n{}\nsection2", delimiter_str);
     let result = parse_sections(&content, '#');
-    assert_eq!(result, Err(GreqErrorCodes::TooFewSections));
+    assert_eq!(result, Err(GreqError::TooFewSections { found: 2 }));
 
     // Test with empty content
     let result = parse_sections("", '#');
-    assert_eq!(result, Err(GreqErrorCodes::TooFewSections));
+    assert_eq!(result, Err(GreqError::TooFewSections { found: 1 }));
 }
 
 #[test]
@@ -169,12 +169,12 @@ fn test_parse_sections_error_too_many_sections() {
     // Test with three delimiters (creating four sections)
     let content = format!("section1\n{}\nsection2\n{}\nsection3\n{}\nsection4", delimiter_str, delimiter_str, delimiter_str);
     let result = parse_sections(&content, '#');
-    assert_eq!(result, Err(GreqErrorCodes::TooManySections));
+    assert_eq!(result, Err(GreqError::TooManySections));
 
     // Test with many delimiters
     let content = format!("s1\n{}\ns2\n{}\ns3\n{}\ns4\n{}\ns5", delimiter_str, delimiter_str, delimiter_str, delimiter_str);
     let result = parse_sections(&content, '#');
-    assert_eq!(result, Err(GreqErrorCodes::TooManySections));
+    assert_eq!(result, Err(GreqError::TooManySections));
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn test_parse_sections_edge_case_minimum_length() {
     // Short delimiter should not be recognized as delimiter
     let content = format!("section1\n{}\nsection2\n{}\nsection3", short_delimiter, proper_delimiter);
     let result = parse_sections(&content, '#');
-    assert_eq!(result, Err(GreqErrorCodes::TooFewSections));
+    assert_eq!(result, Err(GreqError::TooFewSections { found: 2 }));
 }
 
 #[test]

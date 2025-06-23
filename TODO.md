@@ -23,3 +23,5 @@ In case when 'base-request' is set, the body (if it's a JSON) can be either over
 9. Add support for using response of the dependant request in the current request.
 
 10. Convert greq_response.status_code to StatusCode enum.
+
+11. consider adding `timeout` and `description` to the request header.

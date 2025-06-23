@@ -9,23 +9,37 @@ pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], 
     
     let mut sections: [Vec<&str>; 3] = [Vec::new(), Vec::new(), Vec::new()];
     let mut part_number = 0usize;
+    
+    // itertate over the trimmed lines and split them into sections
+    for line in lines.iter().map(|l| l.trim()) {
+        if line.is_empty() && sections[part_number].is_empty() {
+            continue; // skip empty lines in the beginning of a section
+        }
 
-    for line in lines.iter() {
-        if line.starts_with(&delimiter_start) {
+        // delimiter line is when it starts with at least 4 times the delimiter character
+        // and the line contains only that character
+        if line.starts_with(&delimiter_start) && is_line_only_from_char(line, delimiter) {
             part_number += 1;
             if part_number > 2 {
-                return Err(GreqError::TooManySections { found: part_number });
+                return Err(GreqError::TooManySections);
             }
         } else {
-            sections[part_number].push(*line);
+            sections[part_number].push(line);
         }
     }
 
     if part_number != 2 {
-        return Err(GreqError::TooFewSections { found: part_number });
+        return Err(GreqError::TooFewSections { found: part_number + 1 });
     }
 
     Ok(sections)
+}
+
+/// Check that a line contains only from a specified character
+/// The line may contain whitespace characters.
+#[inline]
+pub fn is_line_only_from_char(line: &str, character: char) -> bool {
+    line.chars().all(|c| c.is_whitespace() || c == character)
 }
 
 

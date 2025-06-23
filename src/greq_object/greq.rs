@@ -38,7 +38,7 @@ pub struct Greq {
 
 impl Greq {
     // Add a new boxed version of the `execute` function to handle recursion.
-    fn parse(raw_file_contents: &str) -> Result<Self, GreqError> {
+    pub fn parse(raw_file_contents: &str) -> Result<Self, GreqError> {
         // initialize a new Greq object with the original file contents
         let mut greq = Greq {
             file_contents: raw_file_contents.to_string(),

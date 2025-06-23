@@ -6,8 +6,8 @@ pub enum GreqError {
     #[error("Too few sections found: expected at least 2 sections (header and content), but found {found}")]
     TooFewSections { found: usize },
 
-    #[error("Too many sections found: expected at most 3 sections (header, content, footer), but found {found}")]
-    TooManySections { found: usize },
+    #[error("Too many sections found: expected at most 3 sections (header, content, footer)")]
+    TooManySections,
 
     #[error("Section separator '{separator}' is not set or invalid")]
     SeparatorNotSet { separator: char },
