@@ -91,7 +91,8 @@ impl GreqContent {
         // indicate if we are in the content section (after two newlines)
         let mut reached_request_body = false;
 
-        for line in content_lines {
+        // iterate starting from the second line
+        for line in content_lines[1..].iter() {
 
             // after the first empty line, we are in the content section
             if line.trim().is_empty() && !reached_request_body {
@@ -101,10 +102,10 @@ impl GreqContent {
 
             if reached_request_body {
                 body_lines.push(line)
-            } else if let Some((key, value)) = line.split_once(':') {
+            } else if let Some((key, value)) = line.split_once(':').map(|(k, v)| (k.trim(), v.trim())) {
                 greq_content
                     .headers
-                    .insert(key.trim().to_string(), value.trim().to_string());
+                    .insert(key.to_string(), value.to_string());
 
                 // check the special case of "host" header
                 if key.to_lowercase() == "host" {
@@ -181,7 +182,8 @@ impl EnrichWith for GreqContent {
 }
 
 impl GreqContent {
-    fn method_is_valid(method: &str) -> bool {
+    /// Validates if the provided HTTP method is one of the standard methods.
+    pub fn method_is_valid(method: &str) -> bool {
         let valid_methods = [
             "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"
         ];
@@ -189,7 +191,8 @@ impl GreqContent {
         valid_methods.contains(&method)
     }
 
-    fn is_valid_http_version(version: &str) -> bool {
+    /// Validates if the provided HTTP version is in the correct format "HTTP/x.y"
+    pub fn is_valid_http_version(version: &str) -> bool {
         // Define the regex pattern for "HTTP/x.y" format
         let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
         re.is_match(version)
