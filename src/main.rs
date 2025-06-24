@@ -1,5 +1,25 @@
-#![allow(dead_code)] // Disable warnings about dead code globally
-#![allow(unused_variables)] // Disable warnings about unused variables globally
+/*!
+# Greq - A versatile HTTP client for sending requests and evaluating responses
+
+Greq is a command-line HTTP client that supports request inheritance, dependent requests, 
+and response evaluation through custom conditions. It reads request definitions from 
+specially formatted files and can execute them with comprehensive validation.
+
+## Features
+- HTTP/HTTPS request execution
+- Request inheritance via base-request files
+- Dependent request chaining
+- Response evaluation with custom conditions
+- Support for various operators (equals, contains, regex, etc.)
+- Response output to files
+- Raw HTTP format support
+
+## Usage Examples
+greq request.greq
+greq --display-request-only request.greq
+
+greq --skip-evaluation request.greq
+*/
 
 mod constants;
 mod cli;
@@ -8,7 +28,6 @@ mod greq_object;
 use clap::Parser;
 use cli::CliParameters;
 use greq_object::greq::Greq;
-
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {

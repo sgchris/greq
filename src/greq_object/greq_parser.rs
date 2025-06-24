@@ -1,17 +1,18 @@
 
-use crate::constants::{DELIMITER_MIN_LENGTH};
+use crate::constants::{DELIMITER_MIN_LENGTH, COMMENT_PREFIX};
 use crate::greq_object::greq_errors::GreqError;
 
 // Parse the content of a GREQ file into sections based on a delimiter.
 pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], GreqError> {
     let lines: Vec<&str> = content.lines().collect();
     let delimiter_start = delimiter.to_string().repeat(DELIMITER_MIN_LENGTH);
-    
+
     let mut sections: [Vec<&str>; 3] = [Vec::new(), Vec::new(), Vec::new()];
     let mut part_number = 0usize;
-    
+
     // itertate over the trimmed lines and split them into sections
-    for line in lines.iter().map(|l| l.trim()) {
+    // skip comment lines that start with "--" or "//"
+    for line in lines.iter().map(|l| l.trim()).filter(|l| !l.starts_with(COMMENT_PREFIX)) {
         if line.is_empty() && sections[part_number].is_empty() {
             continue; // skip empty lines in the beginning of a section
         }

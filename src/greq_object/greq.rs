@@ -9,7 +9,6 @@ use crate::constants::{DEFAULT_DELIMITER_CHAR, DEFAULT_HTTPS_PORT, DEFAULT_HTTP_
 use futures::future::BoxFuture;
 use reqwest::{ Client, Method };
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use std::fs;
 use std::collections::HashMap;
@@ -65,7 +64,7 @@ impl Greq {
         println!("done");
 
         print!("parsing footer...");
-        greq.footer = GreqFooter::from_str(&sections[2].join(NEW_LINE))
+        greq.footer = GreqFooter::parse(&sections[2])
             .map_err(|_e| GreqError::ParsingFooterSectionFailed { reason: "Error parsing the footer section".to_string() })?;
         println!("done");
 

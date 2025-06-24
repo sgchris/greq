@@ -1,5 +1,6 @@
 
 pub const NEW_LINE: &str = "\r\n";
+pub const COMMENT_PREFIX: &str = "--";
 pub const DEFAULT_DELIMITER_CHAR: char = '=';
 pub const DELIMITER_MIN_LENGTH: usize = 4;
 
@@ -8,4 +9,9 @@ pub const DEFAULT_HTTP_PORT: u16 = 80;
 pub const DEFAULT_HTTPS_PORT: u16 = 443;
 
 pub const FOOTER_CONDITION_HEADERS_PREFIX: &str = "headers.";
+pub const FOOTER_CONDITION_ALLOWED_KEY_WORDS: [&str; 12] = [
+    "or", "not", "status-code", "response-body", "equals", "contains",
+    "starts-with", "ends-with", "matches-regex", 
+    "greater-than", "less-than", "case-sensitive"
+];
 

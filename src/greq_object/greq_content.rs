@@ -9,8 +9,6 @@ use crate::constants::{DEFAULT_HTTP_VERSION, NEW_LINE, DEFAULT_HTTPS_PORT};
 pub enum GreqContentError {
     #[error("Content cannot be empty")]
     EmptyContent,
-    #[error("Missing request line")]
-    MissingRequestLine,
     #[error("Missing HTTP method")]
     MissingHttpMethod,
     #[error("Invalid HTTP method {method}")]
