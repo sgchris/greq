@@ -28,14 +28,18 @@ impl Error for CliParameterError {}
 )]
 pub struct CliParameters {
     // Send request and only show the response, without performing the evaluations introduced in the footer.
-    #[arg(short, long)]
+    #[arg(short = 's', long)]
     pub skip_evaluation: bool,
 
-    // Display the HTTP request that is goind to be sent.
-    #[arg(short, long)]
-    pub display_request_only: bool,
+    // Display the HTTP response that is going to be received.
+    #[arg(short = 'r', long)]
+    pub show_response: bool,
 
-    // 
+    // Display the HTTP request that is going to be sent.
+    #[arg(short = 'q', long)]
+    pub show_request_only: bool,
+
+    // the greq input files to process
     #[arg()]
     pub input_files: Vec<String>,
 }

@@ -32,3 +32,4 @@ In case when 'base-request' is set, the body (if it's a JSON) can be either over
 
 14. allow missing required values when base request is set.
 add many tests for this case.
+

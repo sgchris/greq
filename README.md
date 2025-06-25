@@ -17,11 +17,9 @@ greq [OPTIONS] [file1.greq] [file2.greq]
 
 Options:
 
-    --output-dir, -o    Store the responses in a specified destination folder
-                        Example: --output-dir "c:\temp\my-responses"
-
-    --log-file, -l      Full path to the log file. By default the log is stored in a temporary
-                        folder (e.g. C:\Temp) and called greq.log
+--show-response - Show the response content in the console
+--skip-evaluation - Skip the evaluation of the response. Useful for debugging purposes.
+--show-request-only - Show the request content in the console without sending it.
 
 ## Greq file spec
 

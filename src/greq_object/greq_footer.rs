@@ -66,6 +66,7 @@ impl GreqFooter {
         }
 
         let mut condition_line: GreqFooterCondition = GreqFooterCondition {
+            original_line: line.to_string(),
             value: value_part.trim().to_string(),
             ..Default::default()
         };

@@ -48,7 +48,7 @@ async fn main() -> std::io::Result<()> {
 
     // Only display the `greq` object without executing it
     // Used when base_request is provided and the user wants to see the merged request
-    if args.display_request_only {
+    if args.show_request_only {
         let greq_as_json = serde_json::to_string_pretty(&greq).unwrap_or(String::from("{}"));
         println!("Parse result:\r\n{}", greq_as_json);
         return Ok(());
@@ -60,7 +60,11 @@ async fn main() -> std::io::Result<()> {
 
         if response.is_ok() {
             let response_as_json = serde_json::to_string_pretty(&response).unwrap_or(String::from("{}"));
-            println!("Response:\r\n{}", response_as_json);
+
+            if args.show_response {
+                // if the user wants to see the response, print it
+                println!("Response:\r\n{}", response_as_json);
+            }
         } else {
             println!("ERROR: {}", response.unwrap_err());
         }
@@ -69,7 +73,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     // execute greq object
-    let result = greq.execute().await.map_err(|e| {
+    let result = greq.execute(args.show_response).await.map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
     })?;
 

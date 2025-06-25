@@ -112,16 +112,23 @@ impl Greq {
     }
 
     /// execute the request and return the evaluation result and the raw response.
-    pub async fn execute(&self) -> Result<GreqExecutionResult, GreqError> {
+    pub async fn execute(&self, show_response: bool) -> Result<GreqExecutionResult, GreqError> {
         if let Some(ref depends_on_request_path) = self.header.depends_on {
             // get_response the dependant request
             let dependant_request = Greq::from_file(depends_on_request_path)?;
-            dependant_request.boxed_execute().await?;
+            dependant_request.boxed_execute(show_response).await?;
         }
 
         let greq_response: GreqResponse = self.get_response().await.map_err(|e| {
             GreqError::HttpError { message: e }
         })?;
+
+        if show_response {
+            // if the user wants to see the response, print it
+            let response_as_json = serde_json::to_string_pretty(&greq_response)
+                .unwrap_or_else(|_| String::from("{}"));
+            println!("Response:\r\n{}", response_as_json);
+        }
 
         let evaluation_result = self.evaluate(&greq_response)?;
 
@@ -135,7 +142,7 @@ impl Greq {
         })
     }
 
-    // send an HTTP request using Reqwest and return the response.
+    /// send an HTTP request using Reqwest and return the response.
     pub async fn get_response(&self) -> Result<GreqResponse, String> {
         // Create a reqwest client
         let client = Client::new();
@@ -150,6 +157,11 @@ impl Greq {
 
         // Add headers if any
         for (header_key, header_value) in &self.content.headers {
+            if Self::should_remove_header_for_reqwest(header_key) {
+                // Skip headers that should not be sent
+                continue;
+            }
+
             request_builder = request_builder.header(header_key, header_value);
         }
 
@@ -188,6 +200,7 @@ impl Greq {
         Ok(greq_response)
     }
 
+    /// Evaluate the conditions in the footer of the Greq object.
     fn evaluate(&self, greq_response: &GreqResponse) -> Result<bool, GreqError> {
         // the final result
         let mut result = true;
@@ -246,8 +259,8 @@ impl Greq {
 
     /// Execute the request and return a boxed future.
     /// This is useful for recursive calls where the return type needs to be boxed.
-    fn boxed_execute(&self) -> BoxFuture<'_, Result<GreqExecutionResult, GreqError>> {
-        Box::pin(self.execute())
+    fn boxed_execute(&self, show_response: bool) -> BoxFuture<'_, Result<GreqExecutionResult, GreqError>> {
+        Box::pin(self.execute(show_response))
     }
 
     /// Get the full URL of the request, including protocol, host, custom port if needed, and URI.
@@ -275,6 +288,17 @@ impl Greq {
     #[inline]
     fn request_can_send_body(&self) -> bool {
         matches!(self.content.method.as_str(), "POST" | "PUT" | "PATCH")
+    }
+
+    /// Check if a header should be removed for reqwest because it's handled
+    /// by the library or is not relevant for the request.
+    #[inline]
+    pub fn should_remove_header_for_reqwest(header_name: &str) -> bool {
+        matches!(header_name.to_lowercase().as_str(),
+            "host" | "connection" | "keep-alive" | "content-length" |
+            "transfer-encoding" | "proxy-connection" | "proxy-authorization" |
+            ":method" | ":path" | ":scheme" | ":authority"
+        )
     }
 }
 
