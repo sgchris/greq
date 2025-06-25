@@ -27,3 +27,8 @@ In case when 'base-request' is set, the body (if it's a JSON) can be either over
 11. consider adding `timeout` and `description` to the request header.
 
 12. Check the case when is_http is not compatible with the port. (E.g. true and 80, false and 443)
+
+13. add properties to the header: override headers, override json body.
+
+14. allow missing required values when base request is set.
+add many tests for this case.

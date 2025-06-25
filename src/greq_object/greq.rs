@@ -5,7 +5,7 @@ use crate::greq_object::greq_response::GreqResponse;
 use crate::greq_object::greq_parser::{ extract_delimiter, parse_sections };
 use crate::greq_object::greq_errors::GreqError;
 use crate::greq_object::greq_evaluator::GreqEvaluator;
-use crate::constants::{DEFAULT_DELIMITER_CHAR, DEFAULT_HTTPS_PORT, DEFAULT_HTTP_PORT, NEW_LINE};
+use crate::constants::{DEFAULT_DELIMITER_CHAR, NEW_LINE};
 use futures::future::BoxFuture;
 use reqwest::{ Client, Method };
 use serde::{Deserialize, Serialize};
@@ -67,9 +67,6 @@ impl Greq {
         greq.footer = GreqFooter::parse(&sections[2])
             .map_err(|_e| GreqError::ParsingFooterSectionFailed { reason: "Error parsing the footer section".to_string() })?;
         println!("done");
-
-        // update the content with the port
-        greq.content.port = if greq.header.is_http { DEFAULT_HTTP_PORT } else { DEFAULT_HTTPS_PORT };
 
         Ok(greq)
     }
@@ -259,14 +256,14 @@ impl Greq {
         let host = &self.content.hostname;
 
         // add the port if it's not the default one
-        let port: String = match self.content.port {
-            DEFAULT_HTTP_PORT | DEFAULT_HTTPS_PORT => "".to_string(),
-            custom_port => format!(":{}", custom_port),
-        };
+        let mut port = String::new();
+        if let Some(custom_port) = self.content.custom_port { 
+            port = format!(":{}", custom_port)
+        }
 
         // ensure the URI starts with a / slash
         let uri = if self.content.uri.is_empty() { 
-            "".to_string()
+            String::new()
         } else {
             format!("/{}", &self.content.uri.trim_start_matches('/'))
         };

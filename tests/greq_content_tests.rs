@@ -1,7 +1,7 @@
 use greq::greq_object::greq_content::GreqContent;
 use greq::greq_object::traits::enrich_with_trait::EnrichWith;
 use std::collections::HashMap;
-use greq::constants::{DEFAULT_HTTP_VERSION, NEW_LINE, DEFAULT_HTTPS_PORT};
+use greq::constants::{DEFAULT_HTTP_VERSION, NEW_LINE};
 use greq::greq_object::greq_content::GreqContentError;
 
 #[test]
@@ -17,7 +17,7 @@ fn test_parse_minimal_valid_request() {
     assert_eq!(result.uri, "/index.html");
     assert_eq!(result.http_version, "HTTP/1.1");
     assert_eq!(result.hostname, "example.com");
-    assert_eq!(result.port, DEFAULT_HTTPS_PORT);
+    assert_eq!(result.custom_port, None);
     assert_eq!(result.headers.get("Host").unwrap(), "example.com");
     assert_eq!(result.body, "");
 }
@@ -32,7 +32,7 @@ fn test_parse_with_custom_port() {
     let result = GreqContent::parse(&content_lines).unwrap();
 
     assert_eq!(result.hostname, "api.example.com");
-    assert_eq!(result.port, 8080);
+    assert_eq!(result.custom_port, Some(8080));
     assert_eq!(result.headers.get("Host").unwrap(), "api.example.com:8080");
 }
 
@@ -150,7 +150,7 @@ fn test_parse_host_with_port_whitespace() {
     let result = GreqContent::parse(&content_lines).unwrap();
 
     assert_eq!(result.hostname, "example.com");
-    assert_eq!(result.port, 9090);
+    assert_eq!(result.custom_port, Some(9090));
 }
 
 // Error cases
@@ -441,7 +441,7 @@ fn test_parse_host_header_among_many() {
     let result = GreqContent::parse(&content_lines).unwrap();
 
     assert_eq!(result.hostname, "example.com");
-    assert_eq!(result.port, 3000);
+    assert_eq!(result.custom_port, Some(3000));
 }
 
 #[test]
@@ -453,7 +453,7 @@ fn test_parse_zero_port() {
 
     let result = GreqContent::parse(&content_lines).unwrap();
 
-    assert_eq!(result.port, 0);
+    assert_eq!(result.custom_port, Some(0));
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn test_parse_max_port() {
 
     let result = GreqContent::parse(&content_lines).unwrap();
 
-    assert_eq!(result.port, 65535);
+    assert_eq!(result.custom_port, Some(65535));
 }
 
 // Tests for method validation
@@ -498,7 +498,7 @@ fn test_enrich_with_empty_self() {
     let content_to_merge = GreqContent {
         method: "GET".to_string(),
         hostname: "example.com".to_string(),
-        port: 443,
+        custom_port: Some(443),
         http_version: "HTTP/1.1".to_string(),
         uri: "/test".to_string(),
         headers: {
@@ -514,7 +514,7 @@ fn test_enrich_with_empty_self() {
     assert_eq!(content_self.method, "GET");
     assert_eq!(content_self.uri, "/test");
     assert_eq!(content_self.hostname, "example.com");
-    assert_eq!(content_self.port, 443);
+    assert_eq!(content_self.custom_port, Some(443));
     assert_eq!(content_self.headers.get("Host").unwrap(), "example.com");
     assert_eq!(content_self.body, "body");
 }
@@ -524,7 +524,7 @@ fn test_enrich_with_non_empty_self() {
     let mut content_self = GreqContent {
         method: "GET".to_string(),
         hostname: "base.com".to_string(),
-        port: 443,
+        custom_port: Some(443),
         http_version: "HTTP/1.1".to_string(),
         uri: "/base".to_string(),
         headers: {
@@ -538,7 +538,7 @@ fn test_enrich_with_non_empty_self() {
     let content_to_merge = GreqContent {
         method: "POST".to_string(),
         hostname: "merge.com".to_string(),
-        port: 8080,
+        custom_port: Some(8080),
         http_version: "HTTP/1.1".to_string(),
         uri: "/merge".to_string(),
         headers: {
@@ -553,14 +553,14 @@ fn test_enrich_with_non_empty_self() {
     content_self.enrich_with(&content_to_merge).unwrap();
 
     // Method, URI, hostname, port and body should be updated
-    assert_eq!(content_self.method, "POST");
-    assert_eq!(content_self.uri, "/merge");
-    assert_eq!(content_self.hostname, "merge.com");
-    assert_eq!(content_self.port, 8080);
-    assert_eq!(content_self.body, "merge body");
+    assert_eq!(content_self.method, "GET");
+    assert_eq!(content_self.uri, "/base");
+    assert_eq!(content_self.hostname, "base.com");
+    assert_eq!(content_self.custom_port, Some(443));
+    assert_eq!(content_self.body, "base body");
 
     // Headers should be merged
-    assert_eq!(content_self.headers.get("Host").unwrap(), "merge.com");
+    assert_eq!(content_self.headers.get("Host").unwrap(), "base.com");
     assert_eq!(content_self.headers.get("Content-Type").unwrap(), "application/json");
 }
 
@@ -569,7 +569,7 @@ fn test_enrich_with_headers_only() {
     let mut content_self = GreqContent {
         method: "GET".to_string(),
         hostname: "example.com".to_string(),
-        port: 443,
+        custom_port: Some(443),
         http_version: "HTTP/1.1".to_string(),
         uri: "/test".to_string(),
         headers: {
@@ -583,7 +583,7 @@ fn test_enrich_with_headers_only() {
     let content_to_merge = GreqContent {
         method: "GET".to_string(),
         hostname: "example.com".to_string(),
-        port: 443,
+        custom_port: Some(443),
         http_version: "HTTP/1.1".to_string(),
         uri: "/test".to_string(),
         headers: {
@@ -604,6 +604,6 @@ fn test_enrich_with_headers_only() {
     assert_eq!(content_self.method, "GET");
     assert_eq!(content_self.uri, "/test");
     assert_eq!(content_self.hostname, "example.com");
-    assert_eq!(content_self.port, 443);
+    assert_eq!(content_self.custom_port, Some(443));
     assert_eq!(content_self.body, "");
 }

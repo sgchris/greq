@@ -3,7 +3,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use thiserror::Error;
-use crate::constants::{DEFAULT_HTTP_VERSION, NEW_LINE, DEFAULT_HTTPS_PORT};
+use crate::constants::{DEFAULT_HTTP_VERSION, NEW_LINE};
 
 #[derive(Debug, PartialEq, Error)]
 pub enum GreqContentError {
@@ -29,7 +29,7 @@ pub enum GreqContentError {
 pub struct GreqContent {
     pub method: String,
     pub hostname: String,
-    pub port: u16,
+    pub custom_port: Option<u16>,
     pub http_version: String,
     pub uri: String,
     pub headers: HashMap<String, String>,
@@ -75,7 +75,7 @@ impl GreqContent {
             uri,
             http_version,
             headers: HashMap::new(),
-            port: DEFAULT_HTTPS_PORT,
+            custom_port: None,
 
             ..Default::default()
         };
@@ -135,7 +135,7 @@ impl GreqContent {
                             });
                         }
 
-                        greq_content.port = parsed_port.unwrap();
+                        greq_content.custom_port = Some(parsed_port.unwrap());
                     }
                 }
             } else {
@@ -160,19 +160,39 @@ impl GreqContent {
 
 impl EnrichWith for GreqContent {
     fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
-    where
+where
         Self: Sized,
     {
-        // Update method, URI, and body
-        self.method = object_to_merge.method.clone();
-        self.uri = object_to_merge.uri.clone();
-        self.body = object_to_merge.body.clone();
-        self.hostname = object_to_merge.hostname.clone();
-        self.port = object_to_merge.port;
+        // Update method only if current is empty
+        if self.method.is_empty() {
+            self.method = object_to_merge.method.clone();
+        }
 
-        // Merge headers
+        // Update URI only if current is empty
+        if self.uri.is_empty() {
+            self.uri = object_to_merge.uri.clone();
+        }
+
+        // Update body only if current is empty
+        if self.body.is_empty() {
+            self.body = object_to_merge.body.clone();
+        }
+
+        // Update hostname only if current is empty
+        if self.hostname.is_empty() {
+            self.hostname = object_to_merge.hostname.clone();
+        }
+
+        // Update custom_port only if current is None
+        if self.custom_port.is_none() {
+            self.custom_port = object_to_merge.custom_port;
+        }
+
+        // Merge headers only for keys that don't exist in current headers
         for (key, value) in &object_to_merge.headers {
-            self.headers.insert(key.clone(), value.clone());
+            if !self.headers.contains_key(key) {
+                self.headers.insert(key.clone(), value.clone());
+            }
         }
 
         Ok(())
