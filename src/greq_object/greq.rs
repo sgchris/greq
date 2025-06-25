@@ -83,14 +83,11 @@ impl Greq {
             });
         }
 
-        // check that the file exists and is readable
-        if !fs::metadata(file_path).map_err(|e| GreqError::ReadGreqFileError { 
-            file_path: file_path.to_string(),
-            reason: e.to_string() 
-        })?.permissions().readonly() {
+        // check that the file exists 
+        if !fs::metadata(file_path).is_ok() {
             return Err(GreqError::ReadGreqFileError { 
                 file_path: file_path.to_string(), 
-                reason: "Insufficient permissions to read the file".to_string() 
+                reason: "File does not exist".to_string() 
             });
         }
 
@@ -257,17 +254,22 @@ impl Greq {
     }
 
     /// Get the full URL of the request, including protocol, host, custom port if needed, and URI.
-    fn get_full_url(&self) -> String {
+    pub fn get_full_url(&self) -> String {
         let protocol = if self.header.is_http { "http" } else { "https" };
         let host = &self.content.hostname;
 
         // add the port if it's not the default one
         let port: String = match self.content.port {
             DEFAULT_HTTP_PORT | DEFAULT_HTTPS_PORT => "".to_string(),
-            _ => format!(":{}", self.content.port),
+            custom_port => format!(":{}", custom_port),
         };
 
-        let uri = &self.content.uri;
+        // ensure the URI starts with a / slash
+        let uri = if self.content.uri.is_empty() { 
+            "".to_string()
+        } else {
+            format!("/{}", &self.content.uri.trim_start_matches('/'))
+        };
 
         format!("{}://{}{}{}", protocol, host, port, uri)
     }

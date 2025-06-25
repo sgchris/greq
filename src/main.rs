@@ -76,5 +76,7 @@ async fn main() -> std::io::Result<()> {
     let result_as_json = serde_json::to_string_pretty(&result).unwrap_or(String::from("{}"));
     println!("Response:\r\n{}", result_as_json);
 
+    // TODO: store the response in a folder/file if specified
+
     Ok(())
 }
