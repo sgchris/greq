@@ -31,9 +31,7 @@ Example:
 
 ```
 project: my-project
-output-folder: ../my-output-folder
 -- comments start with two dash characters
-output-file-name: "my-request-1-output"
 certificate: c:\certs\my-cert.pfx
 ====
 POST /some-url/example
@@ -65,12 +63,10 @@ response-body ends-with case-sensitive: the end.
 #### Header
 
 1. *project* - the name of the project
-2. *output-folder* - Where to store the raw response
-3. *output-file-name* - The name of the output file. Default is the name of the current file with extention ".response"
-4. *certificate* - Absolute path to the certificate
-5. *base-request-path* - reference to GReq file to be used as a base/reference file. The current file with use the header, contents and the footer
+2. *certificate* - Absolute path to the certificate
+3. *base-request-path* - reference to GReq file to be used as a base/reference file. The current file with use the header, contents and the footer
 from the base file. Everything defined in this file will extend/override the values provided in the base GReq file.
-6. *depends-on* - Execute another GReq file before executing this one. (For example, if this request performs delete or update request, you need to create the resource first. You can do that in another GReq file and mention it here)
+4. *depends-on* - Execute another GReq file before executing this one. (For example, if this request performs delete or update request, you need to create the resource first. You can do that in another GReq file and mention it here)
 
 #### Content
 

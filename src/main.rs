@@ -27,6 +27,7 @@ mod greq_object;
 
 use clap::Parser;
 use cli::CliParameters;
+use greq::cli::cli_tools::CliTools;
 use greq_object::greq::Greq;
 
 #[tokio::main]
@@ -73,14 +74,18 @@ async fn main() -> std::io::Result<()> {
     }
 
     // execute greq object
-    let result = greq.execute(args.show_response).await.map_err(|e| {
+    let execution_result_obj = greq.execute(args.show_response).await.map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-    })?;
+    });
 
-    let result_as_json = serde_json::to_string_pretty(&result).unwrap_or(String::from("{}"));
-    println!("Response:\r\n{}", result_as_json);
-
-    // TODO: store the response in a folder/file if specified
+    println!();
+    if execution_result_obj.is_err() {
+        // if the execution failed, print the error
+        CliTools::print_red("Failure");
+    } else {
+        // if the execution was successful, print the success message
+        CliTools::print_green("Success");
+    }
 
     Ok(())
 }

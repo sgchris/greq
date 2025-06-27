@@ -9,12 +9,15 @@ project: test-project
 is-http: true
 ====
 
-GET /api/simple-test
+POST /api/simple-test
 Host: localhost:3000
 Accept: application/json
+
+some body
 
 ====
 
 -- Test conditions
 status-code equals: 200
-response-body contains: "simple-test" 
+response-body not contains: simple-test
+response-body contains: some

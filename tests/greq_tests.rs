@@ -45,7 +45,6 @@ status-code equals: 200"#;
 fn test_parse_delimiter_mixed_with_other_headers() {
     let content = r#"project: TestProject
 delimiter: @
-output-folder: /tmp
 @@@@
 GET /test HTTP/1.1
 Host: example.com

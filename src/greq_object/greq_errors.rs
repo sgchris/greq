@@ -30,9 +30,9 @@ pub enum GreqError {
         reason: String 
     },
 
-    #[error("Evaluation of condition failed: {reason}")]
+    #[error("Evaluation of condition failed: {original_condition}")]
     ConditionEvaluationFailed { 
-        reason: String 
+        original_condition: String,
     },
 }
 

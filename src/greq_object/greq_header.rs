@@ -23,8 +23,6 @@ pub struct GreqHeader {
     pub delimiter: char,
 
     pub project: Option<String>,          // the name of the project. Will be implemented.
-    pub output_folder: Option<String>,    // path to a destination folder. Default current.
-    pub output_file_name: Option<String>, // output filename. default current file name with ".response" extension.
 
     // http and not https request
     pub is_http: bool,  
@@ -43,8 +41,6 @@ impl Default for GreqHeader {
             delimiter: '=',
             is_http: false,
             project: None,           // Option<T> defaults to None
-            output_folder: None,
-            output_file_name: None,
             base_request: None,
             depends_on: None,
         }
@@ -93,12 +89,6 @@ impl GreqHeader {
                 "project" => {
                     greq_header.project = Some(header_value.to_string());
                 }
-                "output-folder" => {
-                    greq_header.output_folder = Some(header_value.to_string());
-                }
-                "output-file-name" => {
-                    greq_header.output_file_name = Some(header_value.to_string());
-                }
                 "is-http" => {
                     greq_header.is_http = match header_value.to_lowercase().as_str() {
                         "true" | "yes" | "1" => true,
@@ -132,12 +122,6 @@ impl EnrichWith for GreqHeader {
         // Override values in self with values from another_object if they are not empty
         if self.project.is_none() && object_to_merge.project.is_some() {
             self.project = object_to_merge.project.clone();
-        }
-        if self.output_folder.is_none() && object_to_merge.output_folder.is_some() {
-            self.output_folder = object_to_merge.output_folder.clone();
-        }
-        if self.output_file_name.is_none() && object_to_merge.output_file_name.is_some() {
-            self.output_file_name = object_to_merge.output_file_name.clone();
         }
 
         // Set base_request if not set in self

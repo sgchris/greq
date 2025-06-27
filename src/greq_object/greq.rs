@@ -5,13 +5,14 @@ use crate::greq_object::greq_response::GreqResponse;
 use crate::greq_object::greq_parser::{ extract_delimiter, parse_sections };
 use crate::greq_object::greq_errors::GreqError;
 use crate::greq_object::greq_evaluator::GreqEvaluator;
-use crate::constants::{DEFAULT_DELIMITER_CHAR, NEW_LINE};
+use crate::constants::{DEFAULT_DELIMITER_CHAR};
 use futures::future::BoxFuture;
 use reqwest::{ Client, Method };
 use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use std::fs;
 use std::collections::HashMap;
+use crate::cli::cli_tools::CliTools;
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct GreqExecutionResult {
@@ -52,21 +53,21 @@ impl Greq {
         // the header (metadata), content (http raw request), and footer (the evaluation conditions)
         let sections = parse_sections(raw_file_contents, greq.sections_delimiter)?;
 
-        print!("parsing header...");
+         print!("parsing header...");
         greq.header = GreqHeader::parse(&sections[0])
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
-        println!("done");
+        CliTools::print_green("done");
 
         print!("parsing content...");
         greq.content = GreqContent::parse(&sections[1])
             .map_err(|e| GreqError::ParsingContentSectionFailed { reason: e.to_string() })?;
         // set the default protocol to https
-        println!("done");
+        CliTools::print_green("done");
 
         print!("parsing footer...");
         greq.footer = GreqFooter::parse(&sections[2])
             .map_err(|_e| GreqError::ParsingFooterSectionFailed { reason: "Error parsing the footer section".to_string() })?;
-        println!("done");
+        CliTools::print_green("done");
 
         Ok(greq)
     }
@@ -130,7 +131,19 @@ impl Greq {
             println!("Response:\r\n{}", response_as_json);
         }
 
-        let evaluation_result = self.evaluate(&greq_response)?;
+        print!("evaluating conditions... ");
+        let evaluation_result_object = self.evaluate(&greq_response);
+        if let Err(evaluation_error) = evaluation_result_object {
+            CliTools::print_red("failed");
+            println!();
+            CliTools::print_red(&evaluation_error.to_string());
+
+            return Err(evaluation_error);
+        } else {
+            CliTools::print_green("done");
+        }
+
+        let evaluation_result = evaluation_result_object.unwrap();
 
         Ok(GreqExecutionResult {
             succeeded: Some(evaluation_result), 
@@ -151,7 +164,6 @@ impl Greq {
         let full_url = self.get_full_url();
 
         // start building the request
-        println!("sending request to {}.\r\ndetails: {:?}\r\n", full_url, self.content);
         let reqwest_method = self.content.method.parse::<Method>().map_err(|e| e.to_string())?;
         let mut request_builder = client.request(reqwest_method, &full_url);
 
@@ -171,9 +183,11 @@ impl Greq {
         }
 
         // Execute the request
+        print!("sending request to '{}'...", full_url);
         let start_time = std::time::Instant::now();
         let raw_response = request_builder.send().await;
         let elapsed_time = start_time.elapsed().as_millis() as u64;
+        CliTools::print_green(&format!("done in {} ms", elapsed_time));
 
         // Check for errors in the response
         let response = raw_response.map_err(|e| e.to_string())?;
@@ -218,7 +232,7 @@ impl Greq {
                 if current_or_result == false {
                     // IR group failed, return
                     return Err(GreqError::ConditionEvaluationFailed {
-                        reason: current_or_group_failures.join(NEW_LINE),
+                        original_condition: current_or_group_failures.join(" OR "),
                     });
                 } else {
                     current_or_group.clear();
@@ -232,7 +246,7 @@ impl Greq {
             if condition.has_or {
                 // save the failed condition for later reporting
                 if condition_result == false {
-                    current_or_group_failures.push(format!("Condition failed: {:?}", condition));
+                    current_or_group_failures.push(format!("{:?}", condition));
                 }
 
                 current_or_group.push(condition_result);
@@ -240,7 +254,7 @@ impl Greq {
                 // if the condition is not part of an OR group, evaluate it directly
                 if condition_result == false {
                     return Err(GreqError::ConditionEvaluationFailed {
-                        reason: format!("Condition failed: {:?}", condition),
+                        original_condition: condition.original_line.clone(),
                     });
                 }
             }
