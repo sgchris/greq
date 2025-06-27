@@ -4,15 +4,15 @@ use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 
 #[derive(Debug, PartialEq, Error)]
 pub enum GreqHeaderError {
-    #[error("Unknown header '{header_name}' encountered in GreqHeader parsing")]
+    #[error("Unknown property '{header_name}' in the header section")]
     UnknownHeader { header_name: String },
     #[error("The line '{line}' does not contain a colon sign")]
     LineHasNoColonSign { line: String },
-    #[error("Header has no name before the colon sign: '{line}'")]
+    #[error("No property name before the colon sign: '{line}'")]
     HeaderHasNoName { line: String },
-    #[error("Header has no value after the colon sign: '{header_name}'")]
+    #[error("No value after the colon sign for '{header_name}'")]
     HeaderHasNoValue { header_name: String },
-    #[error("Not valid header value '{line}'")]
+    #[error("Not valid line in the header section: '{line}'")]
     InvalidHeaderValue { line: String },
 }
 

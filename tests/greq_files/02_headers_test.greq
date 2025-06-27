@@ -7,17 +7,15 @@ is-http: true
 ====
 
 POST /api/users
-Host: api.example.com
+Host: localhost:3000
 Content-Type: application/json
 Accept: application/json
+X-Greq-Custom: Test headers
 
-{
-    "name": "John Doe",
-    "email": "john@example.com"
-}
-
+John Doe
 ====
 
 -- Test conditions
-headers.content-type equals: application/json
-response-content starts-with case-sensitive: "Success" 
+headers.X-Greq-Custom contains: headers
+headers.X-Greq-Custom contains case-sensitive: Test
+response-body starts-with case-sensitive: John

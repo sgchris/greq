@@ -44,8 +44,14 @@ async fn main() -> std::io::Result<()> {
     // Parse the file and load the base requests
     // TODO: handle multiple input files
     let first_input_file = args.input_files.first().unwrap();
-    let greq = Greq::from_file(&first_input_file)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    // parse the input file and initialize the Greq object
+    // TODO: Move that part to another async method to handle multiple files simultaneously
+    let greq_initialization_result = Greq::from_file(&first_input_file);
+    if let Err(e) = greq_initialization_result {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+    }
+    let greq = greq_initialization_result.unwrap();
 
     // Only display the `greq` object without executing it
     // Used when base_request is provided and the user wants to see the merged request

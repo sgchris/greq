@@ -54,6 +54,15 @@ impl Greq {
         let sections = parse_sections(raw_file_contents, greq.sections_delimiter)?;
 
          print!("parsing header...");
+        let greq_header_parsing_result = GreqHeader::parse(&sections[0]);
+        if let Err(greq_header_parsing_error) = greq_header_parsing_result {
+            CliTools::print_red("failed");
+            CliTools::print_red(&greq_header_parsing_error.to_string());
+            return Err(GreqError::ParsingHeaderSectionFailed { 
+                reason: greq_header_parsing_error.to_string()
+            });
+        }
+        
         greq.header = GreqHeader::parse(&sections[0])
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
         CliTools::print_green("done");
