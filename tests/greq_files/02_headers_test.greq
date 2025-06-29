@@ -2,7 +2,6 @@
 -- This test verifies a POST request to /api/users
 -- Expected: Content-Type header is application/json and response starts with "Success"
 project: test-project
-output-folder: ./test-output
 is-http: true
 ====
 

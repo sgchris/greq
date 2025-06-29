@@ -196,10 +196,14 @@ impl Greq {
         let start_time = std::time::Instant::now();
         let raw_response = request_builder.send().await;
         let elapsed_time = start_time.elapsed().as_millis() as u64;
-        CliTools::print_green(&format!("done in {} ms", elapsed_time));
+        if let Err(response_err) = raw_response {
+            CliTools::print_red("failed");
+            CliTools::print_red(&response_err.to_string());
+            return Err(response_err.to_string());
+        }
 
-        // Check for errors in the response
-        let response = raw_response.map_err(|e| e.to_string())?;
+        CliTools::print_green(&format!("done in {} ms", elapsed_time));
+        let response = raw_response.unwrap();
 
         let mut greq_response = GreqResponse {
             status_code: response.status().as_u16(),
