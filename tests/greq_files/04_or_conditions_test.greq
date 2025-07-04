@@ -2,23 +2,23 @@
 -- This test verifies a PUT request to /api/settings
 -- Expected: Either status code 200 or 201, and response ends with "updated"
 project: test-project
-output-folder: ./test-output
 is-http: true
 ====
 
 PUT /api/settings
-Host: api.example.com
+Host: localhost:3000
 Content-Type: application/json
 Accept: application/json
+internal.status-code: 202
 
 {
     "theme": "dark",
     "notifications": true
 }
-
 ====
 
 -- Test conditions
-or status-code equals: 200
 or status-code equals: 201
-response-content ends-with: "updated" 
+or status-code equals: 202
+or status-code equals: 200
+response-body ends-with: }

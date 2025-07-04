@@ -2,17 +2,15 @@
 -- This test verifies a GET request to /api/search
 -- Expected: Response contains a valid UUID and does not contain error messages
 project: test-project
-output-folder: ./test-output
 is-http: true
 ====
-
 GET /api/search?q=test
-Host: api.example.com
+Host: localhost:3000
 Accept: application/json
-
+internal.response-body: f47ac10b-58cc-4372-a567-0e02b2c3d479
 ====
 
 -- Test conditions
-response-content contains regex: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-not response-content contains: "error"
-not response-content contains: "exception" 
+response-body matches-regex: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+not response-body contains: error
+not response-body contains: exception

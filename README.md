@@ -23,16 +23,17 @@ Options:
 
 ## Greq file spec
 
-- Greq file consist of 3 parts separated by 4 equal ("=") characters (at least 4, can be more).
-- The first part is the request metadata, the second part is the raw HTTP request, and the third part consists of assertions. 
+- Greq file consist of 3 parts separated by 4 equal ("=") characters (at least 4, can be more). 
+The first part is the request metadata, the second part is the raw HTTP request, and the third part consists of assertions. 
+
+- The default separator is the '=' char, but it can be user-defined by adding the "separator" property in the header part. e.g. "separator: *".
 
 
-Example:
+### Example:
 
 ```
 project: my-project
 -- comments start with two dash characters
-certificate: c:\certs\my-cert.pfx
 ====
 POST /some-url/example
 host: example.com 
@@ -58,9 +59,14 @@ response-body ends-with case-sensitive: the end.
 -- comment line here
 ```
 
-### Reserved properties
+### Important notes
 
-#### Header
+- The values in the header and the footer **must not** be wrappered in quotes, unless you want to use them as a string.
+- The values in the header and the footer **do not support multi-line**. all the values must be in a single line.
+
+## Reserved properties
+
+### Header
 
 1. *project* - the name of the project
 2. *certificate* - Absolute path to the certificate
@@ -68,7 +74,7 @@ response-body ends-with case-sensitive: the end.
 from the base file. Everything defined in this file will extend/override the values provided in the base GReq file.
 4. *depends-on* - Execute another GReq file before executing this one. (For example, if this request performs delete or update request, you need to create the resource first. You can do that in another GReq file and mention it here)
 
-#### Content
+### Content
 
 Standard HTTP request protocol
 
@@ -76,7 +82,7 @@ Standard HTTP request protocol
 + Headers
 + Request content (After two "\r\n" EOL characters, as the standard HTTP protocol)
 
-#### Footer
+### Footer
 
 conditions are defined in the following format:
 
@@ -88,7 +94,7 @@ conditions are defined in the following format:
 
 1. status-code 
 2. header
-2. response
+2. response-body
 
 *Notes*
 
