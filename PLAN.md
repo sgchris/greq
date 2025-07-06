@@ -38,30 +38,33 @@
 
     
 
-### Main algorithm
+### Greq algorithm (will be called from main)
 
 ```pseudo
 Parameters: 
-    input file(s)
+    input file(s) - vec of strings
+    Parse Only - boolean
 ```
-
 
 Execution:
 ```
+
+main method:
     validate file exists and read the file
 
     check user-defined separator (default '=')
 
     parse and validate the header part
-        - Ensure base-request and dependencies files exist and readable
 
-    if there are dependant requests - execute them first
-        - Keep the response (for further variables)
-        - Dependency response should implement "get_var" method
-
-    if header contains base-request
-        - Call the method recursively with that file
-        - Keep the parsed Greq file
+    If provided "extends" or "dependency"
+        - Ensure files exist and readable
+        - run two processes simultaneously 
+            * load 'base' 
+                - call recursively with 'Parse Only' true
+                - Keep the Greq object of the base request
+            * execute 'dependency' (only if 'Parse Only' is false)
+                - call recursively with 'Parse Only' false
+                - Keep the execution response object
 
     Re-parse the sections with Optional parameters
         - Greq.<section> 
@@ -160,9 +163,19 @@ Execution:
     * Must be async
 
 1. Create dependecy response struct
+    * Contain execution result (0 - success, otherwise it's an error code)
     * implement `get_var`
 
 2. Rename `base-request` to `extends`
+
+3. Execution results - consider using sysexits crate
+    - 0: Success
+    - 1: General error
+    - 64: Command line usage error
+    - 65: Data format error
+    - 69: Service unavailable
+    - 74: Input/output error
+
 
 
 
