@@ -14,15 +14,40 @@
 ### Future features
 
 1. Support several request dependencies
+2. Support remapping variables in the header. 
+    format:
+    `variables: var1_name: $(dependency_var1); var2_name: $(dependency_var2); 
+
+    For example:
+    ```
+    dependency: login-request
+    variables: auth_token_from_login_request: $(headers.X-Auth-Token); response_body: $(response-body)
+    ```
+
+    later on it's used as:
+    ```
+    POST /blog_posts
+    Host: example.com
+    Authentication: bearer $(auth_token_from_login_request)
+    ...
+    Request body
+    ```
+    
 
 ## Execution Plan
+
+    
 
 ### Main algorithm
 
 ```pseudo
+Parameters: 
+    input file(s)
+```
 
-Parameters: input file(s)
 
+Execution:
+```
     validate file exists and read the file
 
     check user-defined separator (default '=')
@@ -43,40 +68,86 @@ Parameters: input file(s)
         - Dependency response
 
     Execute the request and evaluate the response
-
 ```
+
 
 ### Header part
 
-```pseudo
-
 Parameters: 
+```pseudo
 * header lines, 
-* (optional) base request's header object (ref)
+* (optional) "Extends" header object (ref)
 * (optional) dependency response object (ref)
+```
 
 Execution:
+
+```pseudo
+    if dependency result provided
+        replace placeholders with the variables (before the validations)
 
     Parse the properties and make basic validations, 
         (check unknown headers, bad format, etc.)
 
-    If base request's header parameter provided, enrich with it
-    (don't include the base request, it should be loaded recursively)
+    if base request's header parameter provided, 
+        - enrich the current header with it
+        (don't include the "extends")
+    otherwise if "extends" provided
+        validate "extends" property (file exists)
 
-    Validate "extends" and "dependency"
-        Check that files exist and readable
-
+    if dependency result provided
+        replace placeholders with the variables (after the validations)
+    otherwise if "dependency" provided
+        (dependency wasn't executed)
+        validate dependency property (file exists)
 ```
 
 ### Content part
 
+Parameters:
 ```pseudo
-    Parse the properties and make basic validations, like check unknown headers, bad format, etc.
+* content lines
+* (optional) "Extends"' content object (ref)
+* (optional) dependency response object (ref)
+```
 
-    If base request header provided, enrich with it
+Execution:
 
-    Validate "extends" and "dependency"
-        Check that files exist and readable
+```pseudo
+    if dependency result provided
+        replace placeholders with the variables (before the validations)
+
+    Parse and validate
+    - The request line ("GET /some/path") is required
+
+    if base request's content parameter provided, 
+        - enrich the content with it
+        (don't include the base request)
+
+    if dependency result provided
+        replace placeholders with the variables (after the validations)
+
+```
+
+### Footer part
+
+Parameters:
+```pseudo
+* content lines
+* (optional) "Extends"' footer object (ref)
+* (optional) dependency response object (ref)
+```
+
+Execution:
+
+```pseudo
+    Parse and validate (format, unknown conditions)
+
+    if base request's footer parameter provided, 
+        - enrich the current footer with it
+
+    if dependency result provided
+        replace placeholders with the variables (after the validations)
 
 ```
 
