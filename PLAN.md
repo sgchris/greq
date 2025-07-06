@@ -32,18 +32,15 @@
     ...
     Request body
     ```
-    
 
 ## Execution Plan
-
-    
 
 ### Greq algorithm (will be called from main)
 
 ```pseudo
 Parameters: 
     input file(s) - vec of strings
-    Parse Only - boolean
+    Parse Only - boolean, default false
 ```
 
 Execution:
@@ -66,11 +63,13 @@ main method:
                 - call recursively with 'Parse Only' false
                 - Keep the execution response object
 
-    Re-parse the sections with Optional parameters
-        - Greq.<section> 
+    Re-parse the sections with optional parameters
+        - Base Greq
         - Dependency response
 
     Execute the request and evaluate the response
+
+    Return execution object, or execution/evaluation failure
 ```
 
 
@@ -154,10 +153,7 @@ Execution:
 
 ```
 
-
-
-
-## Stuff to consider
+# Stuff to consider
 
 1. Create separate method that receives a file and returns Greq object.
     * Must be async
