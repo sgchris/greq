@@ -55,7 +55,7 @@ main method:
 
     If provided "extends" or "dependency"
         - Ensure files exist and readable
-        - run two processes simultaneously 
+        - run the following processes simultaneously 
             * load 'base' 
                 - call recursively with 'Parse Only' true
                 - Keep the Greq object of the base request
@@ -63,13 +63,15 @@ main method:
                 - call recursively with 'Parse Only' false
                 - Keep the execution response object
 
-    Re-parse the sections with optional parameters
-        - Base Greq
-        - Dependency response
+    if "extends" was provided re-parse the header part
 
-    Execute the request and evaluate the response
+    parse the content and the footer (with base and dependency results if provided)
 
-    Return execution object, or execution/evaluation failure
+    If Parse-Only is false
+        - Send the request and evaluate the response
+        - Return execution response
+    Otherwise
+        - return the parsed Greq object
 ```
 
 
