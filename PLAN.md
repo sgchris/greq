@@ -96,14 +96,15 @@ Execution:
     if base request's header parameter provided, 
         - enrich the current header with it
         (don't include the "extends")
-    otherwise if "extends" provided
-        validate "extends" property (file exists)
+    otherwise if "extends" property provided
+        validate "extends" property - file exists
 
     if dependency result provided
         replace placeholders with the variables (after the validations)
-    otherwise if "dependency" provided
-        (dependency wasn't executed)
+    otherwise if "dependency" property provided
         validate dependency property (file exists)
+
+    return GreqHeader object
 ```
 
 ### Content part
@@ -131,6 +132,8 @@ Execution:
     if dependency result provided
         replace placeholders with the variables (after the validations)
 
+    return GreqContent object
+
 ```
 
 ### Footer part
@@ -145,6 +148,9 @@ Parameters:
 Execution:
 
 ```pseudo
+    if dependency result provided
+        replace placeholders with the variables (before the validations)
+
     Parse and validate (format, unknown conditions)
 
     if base request's footer parameter provided, 
