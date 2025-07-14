@@ -1,13 +1,16 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use std::borrow::Cow;
+
 use crate::greq_object::{
     greq_response::GreqResponse, 
-    traits::enrich_with_trait::EnrichWith
+    traits::enrich_with_trait::EnrichWith,
+    greq_parser::{
+        strs_to_cows,
+        replace_placeholders_in_lines,
+        resolve_and_check_file_exists,
+    },
 };
-use std::borrow::Cow;
-use std::path::{Path, PathBuf};
-use std::io; 
-use std::env;
 
 #[derive(Debug, PartialEq, Error)]
 pub enum GreqHeaderError {
@@ -70,14 +73,14 @@ impl GreqHeader {
         greq_file_path: String,
         base_request: Option<&GreqHeader>,
         dependency_response: Option<&GreqResponse>,
-    ) -> Result<GreqHeader, GreqHeaderError> {
+    ) -> Result<Self, GreqHeaderError> {
 
         // convert header_lines to COW (changeable on write) strings
-        let mut cow_header_lines = GreqHeader::strs_to_cows(header_lines);
+        let mut cow_header_lines = strs_to_cows(header_lines);
 
         // replace placeholders in the header lines with values from the dependency response
         if let Some(dependency_response_obj) = dependency_response {
-            GreqHeader::replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
+            replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
         }
 
         // parse the header lines and initialize the GreqHeader object
@@ -93,7 +96,7 @@ impl GreqHeader {
         if dependency_response.is_some() {
             if base_request.is_some() {
                 let dependency_response_obj = dependency_response.unwrap();
-                GreqHeader::replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
+                replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
             }
         } else if greq_header.depends_on.is_some() {
             GreqHeader::check_and_update_depends_on(&mut greq_header);
@@ -183,7 +186,7 @@ impl GreqHeader {
             }
 
             // get the absolute path of the base request file
-            let absolute_base_path = GreqHeader::resolve_and_check_file_exists(&base_request_name, Some(greq_header.absolute_path.as_ref()))
+            let absolute_base_path = resolve_and_check_file_exists(&base_request_name, Some(greq_header.absolute_path.as_ref()))
                 .map_err(|_| GreqHeaderError::FileDoesNotExist { path: base_request_name.to_string() })?;
 
             // update the base_request field with the absolute path
@@ -197,7 +200,7 @@ impl GreqHeader {
     /// value to the absolute path.
     fn check_and_update_depends_on(greq_header: &mut GreqHeader) -> Result<(), GreqHeaderError> {
         // if the depends_on property is set, check if the file exists
-        let absolute_depends_on_path = GreqHeader::resolve_and_check_file_exists(
+        let absolute_depends_on_path = resolve_and_check_file_exists(
             greq_header.depends_on.as_ref().unwrap(),
             Some(&greq_header.absolute_path),
         ).map_err(|_| GreqHeaderError::FileDoesNotExist { path: greq_header.depends_on.as_ref().unwrap().to_string() })?;
@@ -207,78 +210,8 @@ impl GreqHeader {
         Ok(())
     }
 
-    /// check if a file exists, and return its absolute path.
-    fn resolve_and_check_file_exists(
-        file_path: &str, // Changed to &str
-        base_path: Option<&str>, // Changed to Option<&str>
-    ) -> io::Result<String> {
-        let candidate_path = if Path::new(file_path).is_absolute() { // Use Path::new for check
-            // If the provided path is already absolute, use it directly
-            PathBuf::from(file_path) // Convert &str to PathBuf
-        } else {
-            // If the provided path is relative, resolve it against the base_path
-            // or the current working directory if base_path is None.
-            let actual_base = match base_path {
-                Some(path_str) => PathBuf::from(path_str), // Convert &str to PathBuf
-                None => env::current_dir()?, // Get current working directory, propagate error if any
-            };
-            actual_base.join(file_path) // Join PathBuf with &str
-        };
 
-        // Check if the candidate path exists
-        if candidate_path.exists() {
-            // If it exists, return its canonicalized absolute path as a String.
-            // canonicalize() resolves all symlinks, `.` and `..` components.
-            candidate_path.canonicalize()? // This returns Result<PathBuf, io::Error>
-                .to_str() // Convert Path to &str (Option<&str>)
-                .map(|s| s.to_owned()) // Convert &str to String (Option<String>)
-                .ok_or_else(|| { // If None (path is not valid UTF-8), return an error
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Resolved path contains invalid Unicode: {}", candidate_path.display()),
-                    )
-                })
-        } else {
-            // If the file does not exist at the candidate path, return a NotFound error.
-            Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("File not found: {}", candidate_path.display()),
-            ))
-        }
-    }
 
-    /// convert header_lines to COW (changeable on write) strings
-    #[inline(always)]
-    fn strs_to_cows<'a>(strs: &'a Vec<&'a str>) -> Vec<Cow<'a, str>> {
-        strs.iter()
-            .map(|&s| Cow::from(s))
-            .collect()
-    }
-
-    /// Replace placeholders in the header lines with values from 
-    /// get_var in the GreqResponse object.
-    ///
-    /// TODO: Check if it's possible to make less "clone" calls
-    pub fn replace_placeholders_in_lines(
-        header_lines: &mut Vec<Cow<str>>,
-        greq_response: &GreqResponse,
-    ) {
-        // regex that finds "$(variable_name)" in the line, without escaping
-        let re = regex::Regex::new(r"(?<!\\)\$\(([^)]+)\)").unwrap();
-
-        // replace the placeholders in the header lines
-        for line in header_lines.iter_mut() {
-            if !re.is_match(line) {
-                continue; // no placeholders to replace
-            }
-
-            // replace the placeholders in the line and change to owned COW
-            *line = re.replace_all(line, |caps: &regex::Captures| {
-                let var_name = &caps[1];
-                greq_response.get_var(var_name)
-            }).into_owned().into();
-        }
-    }
 }
 
 impl EnrichWith for GreqHeader {

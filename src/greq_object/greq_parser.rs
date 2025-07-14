@@ -1,6 +1,13 @@
+use std::borrow::Cow;
+use std::path::{Path, PathBuf};
+use std::io; 
+use std::env;
 
 use crate::constants::{DELIMITER_MIN_LENGTH, COMMENT_PREFIX};
-use crate::greq_object::greq_errors::GreqError;
+use crate::greq_object::{
+    greq_errors::GreqError,
+    greq_response::GreqResponse,
+};
 
 // Parse the content of a GREQ file into sections based on a delimiter.
 pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], GreqError> {
@@ -51,5 +58,78 @@ pub fn extract_delimiter(content: &str) -> Option<char> {
         .find(|line| line.to_lowercase().starts_with("delimiter"))
         .and_then(|line| line.split_once(':'))
         .and_then(|(_, value)| value.trim().chars().next())
+}
+
+/// convert header_lines to COW (changeable on write) strings
+#[inline(always)]
+pub fn strs_to_cows<'a>(strs: &'a Vec<&'a str>) -> Vec<Cow<'a, str>> {
+    strs.iter()
+        .map(|&s| Cow::from(s))
+        .collect()
+}
+
+/// Replace placeholders in the lines with values from 
+/// get_var in the GreqResponse object.
+pub fn replace_placeholders_in_lines(
+    lines: &mut Vec<Cow<str>>,
+    greq_response: &GreqResponse,
+) {
+    // regex that finds "$(variable_name)" in the line, without escaping
+    let re = regex::Regex::new(r"(?<!\\)\$\(([^)]+)\)").unwrap();
+
+    // replace the placeholders in the header lines
+    for line in lines.iter_mut() {
+        if !re.is_match(line) {
+            continue; // no placeholders to replace
+        }
+
+        // replace the placeholders in the line and change to owned COW
+        *line = re.replace_all(line, |caps: &regex::Captures| {
+            let var_name = &caps[1];
+            greq_response.get_var(var_name)
+        }).into_owned().into();
+    }
+}
+
+/// Check if a file exists, and return its absolute path.
+/// If the file path is relative, it will be resolved against the
+/// current working directory or a provided base path.
+pub fn resolve_and_check_file_exists(
+    file_path: &str, // absolute or relative path to the file
+    base_path: Option<&str>, // The base path when relative paths are provided
+) -> io::Result<String> {
+    let candidate_path = if Path::new(file_path).is_absolute() { // Use Path::new for check
+        // If the provided path is already absolute, use it directly
+        PathBuf::from(file_path) // Convert &str to PathBuf
+    } else {
+        // If the provided path is relative, resolve it against the base_path
+        // or the current working directory if base_path is None.
+        let actual_base = match base_path {
+            Some(path_str) => PathBuf::from(path_str), // Convert &str to PathBuf
+            None => env::current_dir()?, // Get current working directory, propagate error if any
+        };
+        actual_base.join(file_path) // Join PathBuf with &str
+    };
+
+    // Check if the candidate path exists
+    if candidate_path.exists() {
+        // If it exists, return its canonicalized absolute path as a String.
+        // canonicalize() resolves all symlinks, `.` and `..` components.
+        candidate_path.canonicalize()? // This returns Result<PathBuf, io::Error>
+            .to_str() // Convert Path to &str (Option<&str>)
+            .map(|s| s.to_owned()) // Convert &str to String (Option<String>)
+            .ok_or_else(|| { // If None (path is not valid UTF-8), return an error
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Resolved path contains invalid Unicode: {}", candidate_path.display()),
+                )
+            })
+    } else {
+        // If the file does not exist at the candidate path, return a NotFound error.
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("File not found: {}", candidate_path.display()),
+        ))
+    }
 }
 

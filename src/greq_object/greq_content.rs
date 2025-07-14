@@ -1,7 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, intrinsics::const_eval_select};
 use regex::Regex;
+use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
-use crate::greq_object::traits::enrich_with_trait::EnrichWith;
+use crate::greq_object::{
+    greq::Greq, greq_parser::{
+        replace_placeholders_in_lines, resolve_and_check_file_exists, strs_to_cows
+    }, greq_response::GreqResponse, traits::enrich_with_trait::EnrichWith
+};
 use thiserror::Error;
 use crate::constants::{DEFAULT_HTTP_VERSION, NEW_LINE};
 
@@ -37,11 +42,48 @@ pub struct GreqContent {
 }
 
 impl GreqContent {
-    pub fn parse(content_lines: &Vec<&str>) -> Result<Self, GreqContentError> {
-        // Check the minimum number of lines.
-        // must be at least 2 lines: the request line and the host header.
-        if content_lines.len() < 2 {
-            return Err(GreqContentError::EmptyContent);
+    pub fn parse(
+        content_lines: &Vec<&str>,
+        base_request_content: Option<&GreqContent>,
+        dependency_response: Option<&GreqResponse>,
+    ) -> Result<Self, GreqContentError> {
+
+        // convert COW (changeable on write) strings
+        let mut cow_lines = strs_to_cows(content_lines);
+
+        // replace placeholders in the header lines with values from the dependency response
+        if let Some(dependency_response_obj) = dependency_response {
+            replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
+        }
+
+        // parse the content lines and initialize the GreqContent object
+        let mut greq_content = GreqContent::parse_lines_into_greq_content_object(&cow_lines)?;
+
+        if let Some(base_request_content_obj) = base_request_content {
+            // enrich with base_request
+            greq_content.enrich_with(base_request_content_obj)
+                .map_err(|e| GreqContentError::InvalidHeaderLine { line: e })?;
+        }
+
+        if let Some(dependency_response_obj) = dependency_response {
+            // replace again, but only if the base_request_content privided
+            if base_request_content.is_some() {
+                replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
+            }
+        }
+
+        Ok(greq_content)
+    }
+
+
+    /// Content lines might be imcomplete in case when the "extends" header is used
+    /// Therefore, the validation isn't strict.
+    fn parse_lines_into_greq_content_object(
+        content_lines: &Vec<Cow<str>>
+    ) -> Result<Self, GreqContentError> {
+        // if no content lines, return the default
+        if content_lines.is_empty() {
+            return Ok(GreqContent::default());
         }
 
         // Parse the request line.
@@ -147,7 +189,8 @@ impl GreqContent {
 
         // Check if the host header was found
         if !host_header_exists {
-            return Err(GreqContentError::MissingHost);
+            // might be a case when the "extends" header is used
+            // return Err(GreqContentError::MissingHost);
         }
 
         // The rest is the content/body
@@ -163,6 +206,8 @@ impl EnrichWith for GreqContent {
 where
         Self: Sized,
     {
+        // skipping the request line
+        /*
         // Update method only if current is empty
         if self.method.is_empty() {
             self.method = object_to_merge.method.clone();
@@ -172,11 +217,7 @@ where
         if self.uri.is_empty() {
             self.uri = object_to_merge.uri.clone();
         }
-
-        // Update body only if current is empty
-        if self.body.is_empty() {
-            self.body = object_to_merge.body.clone();
-        }
+        */
 
         // Update hostname only if current is empty
         if self.hostname.is_empty() {
@@ -193,6 +234,11 @@ where
             if !self.headers.contains_key(key) {
                 self.headers.insert(key.clone(), value.clone());
             }
+        }
+
+        // Update body only if current is empty
+        if self.body.is_empty() {
+            self.body = object_to_merge.body.clone();
         }
 
         Ok(())
