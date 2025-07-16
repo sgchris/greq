@@ -51,7 +51,7 @@ impl GreqContent {
         // convert COW (changeable on write) strings
         let mut cow_lines = strs_to_cows(content_lines);
 
-        // replace placeholders in the header lines with values from the dependency response
+        // replace placeholders in the content lines with values from the dependency response
         if let Some(dependency_response_obj) = dependency_response {
             replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
         }
@@ -63,11 +63,9 @@ impl GreqContent {
             // enrich with base_request
             greq_content.enrich_with(base_request_content_obj)
                 .map_err(|e| GreqContentError::InvalidHeaderLine { line: e })?;
-        }
 
-        if let Some(dependency_response_obj) = dependency_response {
-            // replace again, but only if the base_request_content privided
-            if base_request_content.is_some() {
+            // replace placeholders after the enrichment
+            if let Some(dependency_response_obj) = dependency_response {
                 replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
             }
         }
@@ -206,19 +204,6 @@ impl EnrichWith for GreqContent {
 where
         Self: Sized,
     {
-        // skipping the request line
-        /*
-        // Update method only if current is empty
-        if self.method.is_empty() {
-            self.method = object_to_merge.method.clone();
-        }
-
-        // Update URI only if current is empty
-        if self.uri.is_empty() {
-            self.uri = object_to_merge.uri.clone();
-        }
-        */
-
         // Update hostname only if current is empty
         if self.hostname.is_empty() {
             self.hostname = object_to_merge.hostname.clone();
@@ -262,3 +247,5 @@ impl GreqContent {
         re.is_match(version)
     }
 }
+
+

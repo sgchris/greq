@@ -110,7 +110,7 @@ impl Greq {
 
         // load the base request if specified
         // "ref" is used to avoid cloning the string unnecessarily
-        if let Some(base_request_path) = greq.header.base_request.clone() {
+        if let Some(base_request_path) = greq.header.extends.clone() {
             let base_greq = Greq::from_file(&base_request_path)?;
 
             // merge the base request into the current request
