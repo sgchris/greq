@@ -89,16 +89,17 @@ impl GreqHeader {
 
         // enrich with base_request 
         // or check if base request property provided and check if it exists
-        GreqHeader::enrich_with_base_request_or_check_if_provided(&mut greq_header, base_request)?;
+        if let Some(base_request_header_obj) = base_request {
+            GreqHeader::enrich_with_base_request_or_check_if_provided(&mut greq_header, &base_request_header_obj)?;
 
-        // After the header was enriched with the base request,
-        // replace placeholders in the header lines with values from the dependency response
-        if dependency_response.is_some() {
-            if base_request.is_some() {
-                let dependency_response_obj = dependency_response.unwrap();
+            // replace placeholders after the enrichment
+            if let Some(dependency_response_obj) = dependency_response {
                 replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
             }
-        } else if greq_header.depends_on.is_some() {
+        }
+
+        // After the header was enriched with the base request,
+        if greq_header.depends_on.is_some() {
             GreqHeader::check_and_update_depends_on(&mut greq_header);
         }
 
@@ -172,12 +173,13 @@ impl GreqHeader {
     /// If the base request is provided, check that the file exists
     fn enrich_with_base_request_or_check_if_provided(
         greq_header: &mut GreqHeader,
-        base_request: Option<&GreqHeader>,
+        base_request: &GreqHeader,
     ) -> Result<(), GreqHeaderError> {
         // if base_request is provided, enrich the greq_header with it
-        if let Some(base_request) = base_request {
-            greq_header.enrich_with(base_request).map_err(|e| GreqHeaderError::GeneralError { error: e })?;
-        } else if greq_header.extends.is_some() {
+        greq_header.enrich_with(base_request)
+            .map_err(|e| GreqHeaderError::GeneralError { error: e })?;
+
+        if greq_header.extends.is_some() {
             // resolve the base_request file path
             let mut base_request_name = Cow::from(greq_header.extends.as_ref().unwrap());
             if !base_request_name.ends_with(".greq") {

@@ -53,7 +53,7 @@ impl Greq {
         // the header (metadata), content (http raw request), and footer (the evaluation conditions)
         let sections = parse_sections(raw_file_contents, greq.sections_delimiter)?;
 
-         print!("parsing header...");
+        print!("parsing header...");
         let greq_header_parsing_result = GreqHeader::parse(&sections[0]);
         if let Err(greq_header_parsing_error) = greq_header_parsing_result {
             CliTools::print_red("failed");

@@ -5,19 +5,25 @@ use serde::{Deserialize, Serialize};
 use crate::greq_object::{
     greq::Greq, greq_parser::{
         replace_placeholders_in_lines, resolve_and_check_file_exists, strs_to_cows
-    }, greq_response::GreqResponse, traits::enrich_with_trait::EnrichWith
+    }, 
+    greq_response::GreqResponse, 
+    traits::enrich_with_trait::EnrichWith
 };
 use thiserror::Error;
 use crate::constants::{DEFAULT_HTTP_VERSION, NEW_LINE};
 
 #[derive(Debug, PartialEq, Error)]
 pub enum GreqContentError {
+    #[error("Invalid request line format: {line}")]
+    InvalidRequestLine { line: String },
     #[error("Content cannot be empty")]
     EmptyContent,
     #[error("Missing HTTP method")]
     MissingHttpMethod,
     #[error("Invalid HTTP method {method}")]
     InvalidHttpMethod { method: String },
+    #[error("Invalid URI in the request {uri}")]
+    InvalidUri { uri: String },
     #[error("Missing URI")]
     MissingUri,
     #[error("Invalid HTTP version format")]
@@ -84,44 +90,23 @@ impl GreqContent {
             return Ok(GreqContent::default());
         }
 
-        // Parse the request line.
-        // (the first line of the content, e.g. "GET /index.html HTTP/1.1")
-        let request_line = content_lines[0].trim();
-        let mut request_parts = request_line.split_whitespace();
-
-        // parse and validate the method (GET/POST/...)
-        let method = request_parts
-            .next()
-            .ok_or(GreqContentError::MissingHttpMethod)?
-            .to_string();
-        if !Self::method_is_valid(&method) {
-            return Err(GreqContentError::InvalidHttpMethod { method });
-        }
-
-        // Parse the URI
-        let uri = request_parts
-            .next()
-            .ok_or(GreqContentError::MissingUri)?.to_string();
-
-        // Parse the HTTP version
-        let http_version = request_parts.next().unwrap_or(DEFAULT_HTTP_VERSION).to_string();
-        if !Self::is_valid_http_version(&http_version) {
-            return Err(GreqContentError::InvalidHttpVersion);
-        }
+        // parse the first line to get the method, URI, and HTTP version
+        let (
+            method, 
+            uri, 
+            http_version
+        ) = GreqContent::parse_request_line(&content_lines[0].trim())?;
 
         // Initialize the HTTP request
         let mut greq_content = GreqContent {
-            method,
-            uri,
-            http_version,
+            method: method.to_string(),
+            uri: uri.to_string(),
+            http_version: http_version.to_string(),
             headers: HashMap::new(),
             custom_port: None,
 
             ..Default::default()
         };
-
-        // Initialize the HTTP request with the hostname and port
-        let mut host_header_exists = false;
 
         // Start the parsing of headers and content
         let mut body_lines: Vec<&str> = vec![];
@@ -141,43 +126,12 @@ impl GreqContent {
             if reached_request_body {
                 body_lines.push(line)
             } else if let Some((key, value)) = line.split_once(':').map(|(k, v)| (k.trim(), v.trim())) {
-                greq_content
-                    .headers
-                    .insert(key.to_string(), value.to_string());
-
-                // check the special case of "host" header
-                if key.to_lowercase() == "host" {
-                    host_header_exists = true;
-
-                    // check if port supplied
-                    let hostname: &str;
-                    let mut port_string: &str = "";
-                    if value.contains(":") {
-                        (hostname, port_string) = value.split_once(":")
-                            .map_or(("", ""), |value_part| (value_part.0.trim(), value_part.1.trim()));
-                    } else {
-                        hostname = value.trim();
-                    }
-
-                    if !hostname.is_empty() {
-                        greq_content.hostname = hostname.to_string();
-                    } else {
-                        return Err(GreqContentError::MissingHost);
-                    }
-
-                    if !port_string.is_empty() {
-                        let parsed_port = port_string
-                            .trim()
-                            .parse::<u16>();
-                        if parsed_port.is_err() {
-                            return Err(GreqContentError::InvalidPort {
-                                line: line.to_string(),
-                            });
-                        }
-
-                        greq_content.custom_port = Some(parsed_port.unwrap());
-                    }
-                }
+                GreqContent::parse_header_line(
+                    &mut greq_content, 
+                    key, 
+                    value, 
+                    line
+                )?;
             } else {
                 return Err(GreqContentError::InvalidHeaderLine {
                     line: line.to_string(),
@@ -185,17 +139,97 @@ impl GreqContent {
             }
         }
 
-        // Check if the host header was found
-        if !host_header_exists {
-            // might be a case when the "extends" header is used
-            // return Err(GreqContentError::MissingHost);
-        }
-
         // The rest is the content/body
         //let content = content_lines.collect::<Vec<&str>>().join("\r\n");
         greq_content.body = body_lines.join(NEW_LINE);
 
         Ok(greq_content)
+    }
+
+    // parse a single header line and update the GreqContent object
+    // if the header is "host", it also updates the hostname and port
+    fn parse_header_line(
+        greq_content: &mut GreqContent,
+        key: &str,
+        value: &str,
+        line: &str
+    ) -> Result<(), GreqContentError> {
+        greq_content
+            .headers
+            .insert(key.to_string(), value.to_string());
+
+        // check the special case of "host" header
+        if key.to_lowercase() == "host" {
+            // check if port supplied
+            let hostname: &str;
+            let mut port_string: &str = "";
+            if value.contains(":") {
+                (hostname, port_string) = value.split_once(":")
+                    .map_or(("", ""), |value_part| (value_part.0.trim(), value_part.1.trim()));
+            } else {
+                hostname = value.trim();
+            }
+
+            if !hostname.is_empty() {
+                greq_content.hostname = hostname.to_string();
+            } else {
+                return Err(GreqContentError::MissingHost);
+            }
+
+            if !port_string.is_empty() {
+                let parsed_port = port_string
+                    .trim()
+                    .parse::<u16>();
+                if parsed_port.is_err() {
+                    return Err(GreqContentError::InvalidPort {
+                        line: line.to_string(),
+                    });
+                }
+
+                greq_content.custom_port = Some(parsed_port.unwrap());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parses the first line of the request to extract method, URI, and HTTP version.
+    fn parse_request_line(request_line: &str) -> Result<(&str, &str, &str), GreqContentError> {
+        // Parse the request line.
+        // (the first line of the content, e.g. "GET /index.html HTTP/1.1")
+        let request_parts = request_line.split_whitespace().collect::<Vec<&str>>();
+
+        // check that it has at least 2 parts (method and URI)
+        if request_parts.len() < 2 || request_parts.len() > 3 {
+            return Err(GreqContentError::InvalidRequestLine {
+                line: request_line.to_string(),
+            });
+        }
+
+        // parse and validate the method (GET/POST/...)
+        let method = request_parts[0];
+        if !Self::method_is_valid(method) {
+            return Err(GreqContentError::InvalidHttpMethod { method: method.to_string() });
+        }
+
+        // Parse the URI
+        let uri = request_parts[1];
+
+        // Check for invalid characters (basic validation)
+        // Allow alphanumeric, path separators, query params, and common URL-safe chars
+        let re = Regex::new(r"^[a-zA-Z0-9\-\._~:/\?#\[\]@!$&'\(\)\*\+,;=%]+$").unwrap();
+        if !re.is_match(uri) {
+            return Err(GreqContentError::InvalidUri { uri: uri.to_string() });
+        }
+
+        // Parse the HTTP version
+        let http_version = if request_parts.len() > 2 {
+            request_parts[2]
+        } else {
+            DEFAULT_HTTP_VERSION
+        };
+
+        Ok((method, uri, http_version))
     }
 }
 

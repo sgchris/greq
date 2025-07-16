@@ -45,3 +45,16 @@ pub struct GreqFooterCondition {
     // whether this condition is part of an OR group (to the previous condition)
     pub has_or: bool,
 }
+
+impl GreqFooterCondition {
+    // compare two conditions
+    pub fn equals(&self, other: &Self) -> bool {
+        self.is_comment == other.is_comment &&
+        self.key == other.key &&
+        self.value == other.value &&
+        self.is_case_sensitive == other.is_case_sensitive &&
+        self.operator == other.operator &&
+        self.has_not == other.has_not &&
+        self.has_or == other.has_or
+    }
+}

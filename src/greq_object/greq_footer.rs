@@ -1,5 +1,15 @@
-use crate::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
-use crate::greq_object::traits::enrich_with_trait::EnrichWith;
+use crate::greq_object::{
+    greq_footer_condition::{
+        GreqFooterCondition,
+        ConditionOperator
+    },
+    greq_parser::{
+        replace_placeholders_in_lines,
+        strs_to_cows
+    }, 
+    greq_response::GreqResponse, 
+    traits::enrich_with_trait::EnrichWith
+};
 use serde::{Deserialize, Serialize};
 use crate::constants::{ FOOTER_CONDITION_HEADERS_PREFIX, FOOTER_CONDITION_ALLOWED_KEY_WORDS };
 use thiserror::Error;
@@ -40,21 +50,52 @@ pub struct GreqFooter {
 }
 
 impl GreqFooter {
-    pub fn parse(footer_lines: &Vec<&str>) -> Result<GreqFooter, GreqFooterError> {
-        let mut conditions: Vec<GreqFooterCondition> = Vec::new();
+    pub fn parse(
+        footer_lines: &Vec<&str>,
+        base_request_footer: Option<&GreqFooter>,
+        dependency_response: Option<&GreqResponse>,
+    ) -> Result<Self, GreqFooterError> {
+
+        // convert COW (changeable on write) strings
+        let mut cow_lines = strs_to_cows(footer_lines);
+
+        // replace placeholders in the content lines with values from the dependency response
+        if let Some(dependency_response_obj) = dependency_response {
+            replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
+        }
 
         // loop through each line in the footer
         // Skip empty lines and comments, they aren't relevant for conditions
+        let mut conditions: Vec<GreqFooterCondition> = Vec::new();
         for line in footer_lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty()) {
-
             // Validate and parse each line
             let condition = Self::parse_condition(line)?;
             conditions.push(condition);
         }
 
-        Ok(GreqFooter {
+        // Create the GreqFooter object
+        let mut greq_footer = GreqFooter {
             conditions,
-        })
+        };
+
+        // enrich with base_request_footer if provided
+        if let Some(base_request_footer_obj) = base_request_footer {
+            // enrich with base_request
+            greq_footer.enrich_with(base_request_footer_obj)
+                .map_err(|e| GreqFooterError::InvalidKey { key: e })?;
+
+            // replace placeholders after the enrichment
+            if let Some(dependency_response_obj) = dependency_response {
+                replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
+            }
+
+            // replace placeholders after the enrichment
+            if let Some(dependency_response_obj) = dependency_response {
+                replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
+            }
+        }
+
+        Ok(greq_footer)
     }
 
     /// Parse a single condition line into a GreqFooterCondition
@@ -193,10 +234,11 @@ impl EnrichWith for GreqFooter {
                 let condition_exists = self
                     .conditions
                     .iter()
-                    .find(|existing_self_condition| existing_self_condition.key == condition.key);
+                    .find(|existing_self_condition| condition.equals(existing_self_condition))
+                    .is_some();
 
                 // add the missing footer condition
-                if condition_exists.is_none() {
+                if !condition_exists {
                     self.conditions.push(condition.clone());
                 }
             }
