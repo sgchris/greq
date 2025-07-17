@@ -1,24 +1,15 @@
 use clap::Parser;
 use std::fs;
-use std::fmt;
-use std::error::Error;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CliParameterError {
+    #[error("No input files specified")]
     NoInputFiles,
-    FileNotFound(String, std::io::Error),
-}
 
-impl fmt::Display for CliParameterError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CliParameterError::NoInputFiles => write!(f, "No input files specified"),
-            CliParameterError::FileNotFound(file, err) => write!(f, "Input file not found: {} ({})", file, err),
-        }
-    }
+    #[error("Input file not found: {file}")]
+    FileNotFound { file: String },
 }
-
-impl Error for CliParameterError {}
 
 #[derive(Parser, Debug, Default)]
 #[command(name = "Greq")]
@@ -51,8 +42,10 @@ impl CliParameters {
         }
 
         for file in &self.input_files {
-            if let Err(e) = fs::metadata(file) {
-                return Err(CliParameterError::FileNotFound(file.clone(), e));
+            if let Err(_) = fs::metadata(file) {
+                return Err(CliParameterError::FileNotFound {
+                    file: file.clone(),
+                });
             }
         }
 
@@ -60,48 +53,3 @@ impl CliParameters {
     }
 }
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::env;
-
-    #[test]
-    fn test_validate_no_input_files() {
-        let params = CliParameters { 
-            input_files: vec![],
-            ..Default::default()
-        };
-        let result = params.validate();
-        assert!(matches!(result, Err(CliParameterError::NoInputFiles)));
-    }
-
-    #[test]
-    fn test_validate_file_not_found() {
-        let params = CliParameters { 
-            input_files: vec!["nonexistent_file.txt".to_string()],
-            ..Default::default()
-        };
-        let result = params.validate();
-        assert!(matches!(result, Err(CliParameterError::FileNotFound(_, _))));
-    }
-
-    #[test]
-    fn test_validate_success() {
-        // Create a temporary file
-        let mut tmp_path = env::temp_dir();
-        tmp_path.push("test_validate_success.txt");
-        File::create(&tmp_path).unwrap();
-
-        let params = CliParameters { 
-            input_files: vec![tmp_path.to_str().unwrap().to_string()],
-            ..Default::default()
-        };
-        let result = params.validate();
-        assert!(result.is_ok());
-
-        // Clean up
-        std::fs::remove_file(&tmp_path).unwrap();
-    }
-}

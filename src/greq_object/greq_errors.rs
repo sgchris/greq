@@ -18,8 +18,14 @@ pub enum GreqError {
     #[error("Failed to parse footer section: {reason}")]
     ParsingFooterSectionFailed { reason: String },
 
+    #[error("Failed to execute the dependency GREQ file '{file_path}'. Reason: {reason}")]
+    ExecuteDependencyGreqFileError { file_path: String, reason: String },
+
     #[error("Failed to read GREQ file '{file_path}'. Reason: {reason}")]
     ReadGreqFileError { file_path: String, reason: String },
+
+    #[error("Failed to load greq file '{file_path}' that this file 'extends'. Reason: {reason}")]
+    ErroLoadingBaseRequest { file_path: String, reason: String },
 
     #[error("HTTP request failed: {message}")]
     HttpError { message: String },

@@ -9,6 +9,39 @@ use crate::greq_object::{
     greq_response::GreqResponse,
 };
 
+
+/// Parse the first section (header) only. until a generic delimiter is found.
+pub fn parse_header_section(content: &str) -> Result<Vec<&str>, GreqError> {
+    // split the content into lines and trim them
+    let lines: Vec<&str> = content.lines().map(|the_line| the_line.trim()).collect();
+
+    // Initialize a vector to hold the header lines
+    let mut header_lines: Vec<&str> = Vec::new();
+
+    for line in lines.iter() {
+        // skip empty lines in the beginning of the header section
+        if line.is_empty() && header_lines.is_empty() {
+            continue; 
+        }
+
+        // skip comment lines that start with "--"
+        // TODO: enable custom delimiter that is non alphanumeric char not a comment
+        if line.starts_with(COMMENT_PREFIX) {
+            continue; // skip comment lines
+        }
+
+        // check if the first char is not a letter or digit, which indicates a delimiter
+        let first_char = line.chars().next().unwrap();
+        if !first_char.is_alphanumeric() && is_line_only_from_char(line, first_char) {
+            break; // stop parsing if the line is a delimiter
+        }
+
+        header_lines.push(line);
+    }
+
+    Ok(header_lines)
+}
+
 // Parse the content of a GREQ file into sections based on a delimiter.
 pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], GreqError> {
     let lines: Vec<&str> = content.lines().collect();
@@ -48,16 +81,6 @@ pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], 
 #[inline]
 pub fn is_line_only_from_char(line: &str, character: char) -> bool {
     line.chars().all(|c| c.is_whitespace() || c == character)
-}
-
-
-// Extract the delimiter character from the content of a GREQ file. Or, use the default delimiter
-// if not specified.
-pub fn extract_delimiter(content: &str) -> Option<char> {
-    content.lines()
-        .find(|line| line.to_lowercase().starts_with("delimiter"))
-        .and_then(|line| line.split_once(':'))
-        .and_then(|(_, value)| value.trim().chars().next())
 }
 
 /// convert header_lines to COW (changeable on write) strings

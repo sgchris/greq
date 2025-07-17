@@ -1,8 +1,9 @@
+use crate::greq_object::greq;
 use crate::greq_object::greq_content::GreqContent;
 use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
 use crate::greq_object::greq_response::GreqResponse;
-use crate::greq_object::greq_parser::{ extract_delimiter, parse_sections };
+use crate::greq_object::greq_parser::{ extract_delimiter, parse_sections, parse_header_section, is_line_only_from_char };
 use crate::greq_object::greq_errors::GreqError;
 use crate::greq_object::greq_evaluator::GreqEvaluator;
 use crate::constants::{DEFAULT_DELIMITER_CHAR};
@@ -37,6 +38,76 @@ pub struct Greq {
 }
 
 impl Greq {
+    pub async fn process(
+        file_path: &str, // absolute path to the file
+        parse_only: Option<bool>, // if true, only parse the file without executing it
+        base_request: Option<&Greq>, // Greq object of the base request
+        dependency_response: Option<&GreqResponse>,
+    ) -> Result<Self, GreqError> {
+        // parse only is false by default
+        let parse_only = parse_only.unwrap_or(false);
+
+        // read the file contents
+        let raw_file_contents = fs::read_to_string(file_path).map_err(|e| {
+            GreqError::ReadGreqFileError { 
+                file_path: file_path.to_string(), 
+                reason: e.to_string() 
+            }
+        })?;
+
+        let header_lines = parse_header_section(&raw_file_contents)
+            .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
+
+        let greq_header = GreqHeader::parse(&header_lines, file_path, None, None)
+            .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
+
+
+        let mut dependency_execution_result = GreqExecutionResult::default();
+        if greq_header.extends.is_some() || greq_header.depends_on.is_some() {
+            if let Some(dependency_greq_file) = greq_header.depends_on {
+                let dependency_greq = Greq::process(
+                    &dependency_greq_file,
+                    Some(true), // parse only
+                    None, // base_request is not needed here
+                    None // dependency_response is not needed here
+                ).await.map_err(|e| {
+                        GreqError::ExecuteDependencyGreqFileError { 
+                            file_path: dependency_greq_file.to_string(), 
+                            reason: e.to_string() 
+                        }
+                    })?;
+
+                // execute the dependency Greq file if parse_only is false
+                if !parse_only {
+                    dependency_execution_result = dependency_greq.boxed_execute(false).await.map_err(|e| {
+                        GreqError::ExecuteDependencyGreqFileError { 
+                            file_path: dependency_greq_file.to_string(), 
+                            reason: e.to_string() 
+                        }
+                    })?;
+                }
+            }
+
+            if let Some(base_request) = greq_header.extends {
+                let base_greq = Greq::process(greq_header.extends.unwrap().as_str(), None, None)
+                    .await
+                    .map_err(|e| GreqError::ErroLoadingBaseRequest { 
+                        file_path: base_request.to_string(), 
+                        reason: e.to_string() 
+                    })?;
+            }
+        }
+
+        //let sections = parse_sections(&raw_file_contents, greq_header.delimiter)?;
+
+
+        // parse the header to check if a custom delimiter was defined
+        GreqHeader::parse(&file_contents, file_path, None, None)
+            .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
+
+        Ok(Greq::default())
+    }
+
     // Add a new boxed version of the `execute` function to handle recursion.
     pub fn parse(raw_file_contents: &str) -> Result<Self, GreqError> {
         // initialize a new Greq object with the original file contents
@@ -122,13 +193,7 @@ impl Greq {
     }
 
     /// execute the request and return the evaluation result and the raw response.
-    pub async fn execute(&self, show_response: bool) -> Result<GreqExecutionResult, GreqError> {
-        if let Some(ref depends_on_request_path) = self.header.depends_on {
-            // get_response the dependant request
-            let dependant_request = Greq::from_file(depends_on_request_path)?;
-            dependant_request.boxed_execute(show_response).await?;
-        }
-
+    pub async fn send_request_and_evaluate_response(&self, show_response: bool) -> Result<GreqExecutionResult, GreqError> {
         let greq_response: GreqResponse = self.get_response().await.map_err(|e| {
             GreqError::HttpError { message: e }
         })?;
@@ -287,7 +352,7 @@ impl Greq {
     /// Execute the request and return a boxed future.
     /// This is useful for recursive calls where the return type needs to be boxed.
     fn boxed_execute(&self, show_response: bool) -> BoxFuture<'_, Result<GreqExecutionResult, GreqError>> {
-        Box::pin(self.execute(show_response))
+        Box::pin(self.send_request_and_evaluate_response(show_response))
     }
 
     /// Get the full URL of the request, including protocol, host, custom port if needed, and URI.

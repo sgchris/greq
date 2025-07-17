@@ -40,14 +40,21 @@ async fn main() -> std::io::Result<()> {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, validation_error));
     }
 
-    // Initialize Greq from the input file
-    // Parse the file and load the base requests
-    // TODO: handle multiple input files
-    let first_input_file = args.input_files.first().unwrap();
+    for input_file in &args.input_files {
+        if let Err(e) = process_input_file(input_file).await {
+            println!("Error processing file '{}': {}", input_file, e);
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+        }
+    }
 
+    Ok(())
+}
+
+/// Process a single input file and return a Greq object.
+pub async fn process_input_file(input_file: &str) -> Result<Greq, String> {
     // parse the input file and initialize the Greq object
     // TODO: Move that part to another async method to handle multiple files simultaneously
-    let greq_initialization_result = Greq::from_file(&first_input_file);
+    let greq_initialization_result = Greq::from_file(&input_file, None, None).await;
     if let Err(e) = greq_initialization_result {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
     }
@@ -95,3 +102,7 @@ async fn main() -> std::io::Result<()> {
 
     Ok(())
 }
+
+
+
+

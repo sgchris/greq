@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use std::borrow::Cow;
+use crate::constants::{DEFAULT_DELIMITER_CHAR};
 
 use crate::greq_object::{
     greq_response::GreqResponse, 
@@ -56,7 +57,7 @@ impl Default for GreqHeader {
     fn default() -> Self {
         GreqHeader {
             absolute_path: String::new(),
-            delimiter: '=',
+            delimiter: DEFAULT_DELIMITER_CHAR,
             is_http: false,
             project: None,
             extends: None,
@@ -70,7 +71,7 @@ impl GreqHeader {
     /// Parse the header lines and return a GreqHeader object.
     pub fn parse(
         header_lines: &Vec<&str>,
-        greq_file_path: String,
+        greq_file_path: &str,
         base_request: Option<&GreqHeader>,
         dependency_response: Option<&GreqResponse>,
     ) -> Result<Self, GreqHeaderError> {
@@ -85,7 +86,7 @@ impl GreqHeader {
 
         // parse the header lines and initialize the GreqHeader object
         let mut greq_header = GreqHeader::parse_lines_into_greq_header_object(&cow_header_lines)?;
-        greq_header.absolute_path = greq_file_path;
+        greq_header.absolute_path = greq_file_path.to_string();
 
         // enrich with base_request 
         // or check if base request property provided and check if it exists
