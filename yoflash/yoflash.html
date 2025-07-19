@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yoni's Collection Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 1200px;
+            height: 900px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        #powerTimer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ff6b6b;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            display: none;
+            animation: pulse-power 0.5s infinite alternate;
+        }
+
+        #speedTimer {
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            color: #00ff00;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            display: none;
+            animation: pulse-speed 0.4s infinite alternate;
+        }
+
+        @keyframes pulse-speed {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.08); }
+        }
+
+        @keyframes pulse-power {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        #player {
+            position: absolute;
+            width: 45px;
+            height: 60px;
+            transition: all 0.1s ease;
+            z-index: 10;
+        }
+
+        #beast {
+            position: absolute;
+            width: 52px;
+            height: 67px;
+            transition: all 0.15s ease;
+            z-index: 9;
+        }
+
+        .beast-walking {
+            animation: beastWalk 0.4s ease-in-out infinite;
+        }
+
+        @keyframes beastWalk {
+            0% { transform: translateY(0px) rotate(0deg) scale(1); }
+            25% { transform: translateY(-2px) rotate(-3deg) scale(1.08); }
+            50% { transform: translateY(-1px) rotate(0deg) scale(1.05); }
+            75% { transform: translateY(-2px) rotate(3deg) scale(1.08); }
+            100% { transform: translateY(0px) rotate(0deg) scale(1); }
+        }
+
+        .collectible {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle, #ffd700, #ffed4e);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            animation: pulse 1s infinite alternate;
+            z-index: 5;
+        }
+
+        .power-crate {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(45deg, #8B4513, #A0522D);
+            border: 2px solid #654321;
+            border-radius: 4px;
+            box-shadow: 0 0 25px rgba(139, 69, 19, 0.8);
+            animation: crate-glow 1.5s infinite alternate;
+            z-index: 5;
+        }
+
+        .power-crate::before {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 27px;
+            animation: bounce 1s infinite;
+        }
+
+        .power-crate.strength::before {
+            content: '💪';
+        }
+
+        .power-crate.ghost::before {
+            content: '👻';
+        }
+
+        .speed-booster {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(45deg, #00FF00, #32CD32);
+            border: 2px solid #228B22;
+            border-radius: 50%;
+            box-shadow: 0 0 25px rgba(0, 255, 0, 0.8);
+            animation: speed-glow 1s infinite alternate;
+            z-index: 6;
+        }
+
+        .speed-booster::before {
+            content: '⚡';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 27px;
+            animation: speed-pulse 0.8s infinite;
+        }
+
+        @keyframes speed-glow {
+            0% { box-shadow: 0 0 15px rgba(0, 255, 0, 0.6); }
+            100% { box-shadow: 0 0 35px rgba(0, 255, 0, 1); }
+        }
+
+        @keyframes speed-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.3); }
+        }
+
+        .speed-powered {
+            filter: drop-shadow(0 0 8px #00ff00) drop-shadow(0 0 16px #00ff00);
+        }
+
+        @keyframes crate-glow {
+            0% { box-shadow: 0 0 15px rgba(139, 69, 19, 0.6); }
+            100% { box-shadow: 0 0 35px rgba(255, 69, 19, 1); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+
+        .super-powered {
+            filter: drop-shadow(0 0 10px #ff6b6b) drop-shadow(0 0 20px #ff6b6b);
+            animation: super-glow 0.3s infinite alternate !important;
+        }
+
+        .ghost-mode {
+            opacity: 0.4;
+            filter: blur(1px) drop-shadow(0 0 15px #87ceeb);
+            animation: ghost-float 2s ease-in-out infinite alternate !important;
+        }
+
+        @keyframes ghost-float {
+            0% { transform: translateY(0px) scale(1); }
+            100% { transform: translateY(-5px) scale(1.02); }
+        }
+
+        @keyframes super-glow {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.2); }
+        }
+
+        .fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: scale(0); }
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+        }
+
+        .wall {
+            position: absolute;
+            background: linear-gradient(45deg, #34495e, #2c3e50);
+            border: 2px solid #1a252f;
+            border-radius: 4px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #ff4757;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            border: 3px solid #ff4757;
+            z-index: 1000;
+            display: none;
+        }
+
+        #gameOver .subtitle {
+            font-size: 18px;
+            color: #ffa502;
+            margin-top: 15px;
+        }
+
+        .walking {
+            animation: walk 0.3s ease-in-out infinite;
+        }
+
+        @keyframes walk {
+            0% { transform: translateY(0px) rotate(0deg) scale(1); }
+            25% { transform: translateY(-3px) rotate(-2deg) scale(1.05); }
+            50% { transform: translateY(-1px) rotate(0deg) scale(1.02); }
+            75% { transform: translateY(-3px) rotate(2deg) scale(1.05); }
+            100% { transform: translateY(0px) rotate(0deg) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">Score: 0</div>
+        <div id="powerTimer">SUPER POWER: 5s</div>
+        <div id="speedTimer">SPEED BOOST: 5s</div>
+        <div id="player">
+            <!-- Simple person shape using SVG -->
+            <svg width="45" height="60" viewBox="0 0 30 40">
+                <!-- Head -->
+                <circle cx="15" cy="8" r="6" fill="#ffdbac" stroke="#d4af8c" stroke-width="1"/>
+                <!-- Body -->
+                <rect x="10" y="12" width="10" height="18" rx="3" fill="#4a90e2" stroke="#3a7bc8" stroke-width="1"/>
+                <!-- Arms -->
+                <rect x="5" y="15" width="4" height="10" rx="2" fill="#ffdbac" stroke="#d4af8c" stroke-width="1"/>
+                <rect x="21" y="15" width="4" height="10" rx="2" fill="#ffdbac" stroke="#d4af8c" stroke-width="1"/>
+                <!-- Legs -->
+                <rect x="11" y="28" width="3" height="10" rx="1" fill="#2c3e50" stroke="#1a252f" stroke-width="1"/>
+                <rect x="16" y="28" width="3" height="10" rx="1" fill="#2c3e50" stroke="#1a252f" stroke-width="1"/>
+                <!-- Eyes -->
+                <circle cx="12" cy="7" r="1" fill="#333"/>
+                <circle cx="18" cy="7" r="1" fill="#333"/>
+            </svg>
+        </div>
+        <div id="beast">
+            <!-- Beast character using SVG -->
+            <svg width="52" height="67" viewBox="0 0 35 45">
+                <!-- Head -->
+                <circle cx="17.5" cy="10" r="8" fill="#8B0000" stroke="#4B0000" stroke-width="2"/>
+                <!-- Horns -->
+                <polygon points="12,5 14,2 16,5" fill="#2C0000"/>
+                <polygon points="19,5 21,2 23,5" fill="#2C0000"/>
+                <!-- Body -->
+                <rect x="11" y="15" width="13" height="20" rx="4" fill="#4B0082" stroke="#2F0052" stroke-width="2"/>
+                <!-- Arms -->
+                <rect x="5" y="18" width="5" height="12" rx="2" fill="#8B0000" stroke="#4B0000" stroke-width="1"/>
+                <rect x="25" y="18" width="5" height="12" rx="2" fill="#8B0000" stroke="#4B0000" stroke-width="1"/>
+                <!-- Claws -->
+                <polygon points="3,28 5,25 7,28 5,30" fill="#2C0000"/>
+                <polygon points="28,28 30,25 32,28 30,30" fill="#2C0000"/>
+                <!-- Legs -->
+                <rect x="12" y="33" width="4" height="10" rx="1" fill="#2C0000" stroke="#1A0000" stroke-width="1"/>
+                <rect x="19" y="33" width="4" height="10" rx="1" fill="#2C0000" stroke="#1A0000" stroke-width="1"/>
+                <!-- Eyes (glowing red) -->
+                <circle cx="14" cy="9" r="1.5" fill="#FF0000"/>
+                <circle cx="21" cy="9" r="1.5" fill="#FF0000"/>
+                <!-- Evil grin -->
+                <path d="M 13 12 Q 17.5 15 22 12" stroke="#FF0000" stroke-width="1" fill="none"/>
+            </svg>
+        </div>
+        <div id="instructions">Use arrow keys to move and collect the golden orbs!</div>
+        <div id="gameOver">
+            <div>GAME OVER, SUCKER!</div>
+            <div class="subtitle">Max Score: <span id="maxScore">0</span></div>
+        </div>
+    </div>
+
+    <script>
+        class Game {
+            constructor() {
+                this.container = document.getElementById('gameContainer');
+                this.player = document.getElementById('player');
+                this.beast = document.getElementById('beast');
+                this.scoreElement = document.getElementById('score');
+                this.powerTimerElement = document.getElementById('powerTimer');
+                this.speedTimerElement = document.getElementById('speedTimer');
+                this.gameOverElement = document.getElementById('gameOver');
+                this.maxScoreElement = document.getElementById('maxScore');
+                
+                this.gameWidth = 1200;
+                this.gameHeight = 900;
+                this.playerSpeed = 7;
+                this.basePlayerSpeed = 7; // Store base speed for speed boosts
+                this.beastSpeed = 4.2; // Slowed down a bit more
+                this.score = 0;
+                this.maxScore = parseInt(localStorage.getItem('maxScore')) || 0;
+                this.gameTime = 0;
+                this.gameActive = true;
+                this.baseLifetime = 4000; // Base lifetime for collectibles
+                
+                // Power-up system
+                this.isPoweredUp = false;
+                this.powerType = null; // 'strength' or 'ghost'
+                this.powerTimeLeft = 0;
+                this.powerInterval = null;
+                this.beastKilled = false;
+                this.collectiblesAfterBeastKill = 0;
+                this.lastSpawnWasPowerUp = false;
+                
+                // Speed boost system
+                this.isSpeedBoosted = false;
+                this.speedBoostTimeLeft = 0;
+                this.speedBoostInterval = null;
+                this.speedBoosters = new Set();
+                this.lastSpeedBoosterSpawn = 0;
+                
+                this.player.x = this.gameWidth / 2 - 22;
+                this.player.y = this.gameHeight / 2 - 30;
+                
+                // Beast starts from a random corner
+                const corners = [
+                    { x: 30, y: 30 },
+                    { x: this.gameWidth - 82, y: 30 },
+                    { x: 30, y: this.gameHeight - 97 },
+                    { x: this.gameWidth - 82, y: this.gameHeight - 97 }
+                ];
+                const randomCorner = corners[Math.floor(Math.random() * corners.length)];
+                this.beast.x = randomCorner.x;
+                this.beast.y = randomCorner.y;
+                
+                this.collectibles = new Set();
+                this.walls = new Set();
+                this.keys = new Set();
+                this.isWalking = false;
+                this.beastIsWalking = false;
+                
+                // Create audio context for sound effects
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                this.init();
+            }
+
+            init() {
+                this.maxScoreElement.textContent = this.maxScore;
+                this.updatePlayerPosition();
+                this.updateBeastPosition();
+                this.bindEvents();
+                this.createWalls();
+                this.startGameLoop();
+                this.spawnCollectible();
+                this.scheduleSpeedBooster();
+                
+                // Start game timer
+                setInterval(() => {
+                    if (this.gameActive) {
+                        this.gameTime += 1000;
+                    }
+                }, 1000);
+            }
+
+            bindEvents() {
+                document.addEventListener('keydown', (e) => {
+                    if (!this.gameActive) return;
+                    this.keys.add(e.code);
+                    // Start walking animation
+                    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                        if (!this.isWalking) {
+                            this.isWalking = true;
+                            this.player.classList.add('walking');
+                        }
+                    }
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    this.keys.delete(e.code);
+                    // Stop walking animation if no arrow keys are pressed
+                    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some(key => this.keys.has(key))) {
+                        this.isWalking = false;
+                        this.player.classList.remove('walking');
+                    }
+                });
+            }
+
+            updatePlayerPosition() {
+                this.player.style.left = `${this.player.x}px`;
+                this.player.style.top = `${this.player.y}px`;
+            }
+
+            updateBeastPosition() {
+                this.beast.style.left = `${this.beast.x}px`;
+                this.beast.style.top = `${this.beast.y}px`;
+            }
+
+            activatePowerUp(powerType) {
+                this.isPoweredUp = true;
+                this.powerType = powerType;
+                this.powerTimeLeft = 5;
+                
+                if (powerType === 'strength') {
+                    this.player.classList.add('super-powered');
+                    this.powerTimerElement.textContent = 'SUPER STRENGTH: 5s';
+                } else if (powerType === 'ghost') {
+                    this.player.classList.add('ghost-mode');
+                    this.powerTimerElement.textContent = 'GHOST MODE: 5s';
+                }
+                
+                this.powerTimerElement.style.display = 'block';
+                
+                this.powerInterval = setInterval(() => {
+                    this.powerTimeLeft--;
+                    
+                    if (this.powerType === 'strength') {
+                        this.powerTimerElement.textContent = `SUPER STRENGTH: ${this.powerTimeLeft}s`;
+                    } else if (this.powerType === 'ghost') {
+                        this.powerTimerElement.textContent = `GHOST MODE: ${this.powerTimeLeft}s`;
+                    }
+                    
+                    if (this.powerTimeLeft <= 0) {
+                        this.deactivatePowerUp();
+                    }
+                }, 1000);
+            }
+
+            deactivatePowerUp() {
+                this.isPoweredUp = false;
+                this.powerType = null;
+                this.powerTimeLeft = 0;
+                this.player.classList.remove('super-powered', 'ghost-mode');
+                this.powerTimerElement.style.display = 'none';
+                
+                if (this.powerInterval) {
+                    clearInterval(this.powerInterval);
+                    this.powerInterval = null;
+                }
+                
+                // If exiting ghost mode, ensure player is not stuck in a wall
+                this.ensurePlayerNotInWall();
+            }
+
+            activateSpeedBoost() {
+                this.isSpeedBoosted = true;
+                this.speedBoostTimeLeft = 5;
+                this.playerSpeed = this.basePlayerSpeed * 1.25; // 25% speed increase
+                this.player.classList.add('speed-powered');
+                this.speedTimerElement.style.display = 'block';
+                this.updateSpeedTimer();
+                
+                this.speedBoostInterval = setInterval(() => {
+                    this.speedBoostTimeLeft--;
+                    this.updateSpeedTimer();
+                    
+                    if (this.speedBoostTimeLeft <= 0) {
+                        this.deactivateSpeedBoost();
+                    }
+                }, 1000);
+            }
+
+            deactivateSpeedBoost() {
+                this.isSpeedBoosted = false;
+                this.speedBoostTimeLeft = 0;
+                this.playerSpeed = this.basePlayerSpeed; // Reset to base speed
+                this.player.classList.remove('speed-powered');
+                this.speedTimerElement.style.display = 'none';
+                
+                if (this.speedBoostInterval) {
+                    clearInterval(this.speedBoostInterval);
+                    this.speedBoostInterval = null;
+                }
+            }
+
+            updateSpeedTimer() {
+                this.speedTimerElement.textContent = `SPEED BOOST: ${this.speedBoostTimeLeft}s`;
+            }
+
+            scheduleSpeedBooster() {
+                if (!this.gameActive) return;
+                
+                // Schedule next speed booster spawn (random between 10-20 seconds)
+                const delay = 10000 + Math.random() * 10000;
+                setTimeout(() => {
+                    this.spawnSpeedBooster();
+                    this.scheduleSpeedBooster(); // Schedule the next one
+                }, delay);
+            }
+
+            spawnSpeedBooster() {
+                if (!this.gameActive || this.walls.size === 0) return;
+                
+                // Choose a random wall to attach the speed booster to
+                const wallsArray = Array.from(this.walls);
+                const randomWall = wallsArray[Math.floor(Math.random() * wallsArray.length)];
+                
+                const speedBooster = document.createElement('div');
+                speedBooster.className = 'speed-booster';
+                
+                // Position the speed booster on the wall (center of wall)
+                speedBooster.x = randomWall.x + (randomWall.width / 2) - 22; // Center horizontally
+                speedBooster.y = randomWall.y + (randomWall.height / 2) - 22; // Center vertically
+                
+                speedBooster.style.left = `${speedBooster.x}px`;
+                speedBooster.style.top = `${speedBooster.y}px`;
+                
+                this.container.appendChild(speedBooster);
+                this.speedBoosters.add(speedBooster);
+                
+                // Remove speed booster after 5 seconds
+                setTimeout(() => {
+                    if (this.speedBoosters.has(speedBooster)) {
+                        this.removeSpeedBooster(speedBooster);
+                    }
+                }, 5000);
+            }
+
+            removeSpeedBooster(speedBooster, collected = false) {
+                if (!this.speedBoosters.has(speedBooster)) return;
+                
+                this.speedBoosters.delete(speedBooster);
+                
+                if (collected) {
+                    speedBooster.classList.add('fade-out');
+                    setTimeout(() => speedBooster.remove(), 500);
+                } else {
+                    speedBooster.remove();
+                }
+            }
+
+            ensurePlayerNotInWall() {
+                // Check if player is currently inside a wall
+                if (this.checkWallCollision(this.player.x, this.player.y)) {
+                    // Find the nearest valid position
+                    const searchRadius = 50;
+                    const stepSize = 5;
+                    let foundValidPosition = false;
+                    
+                    // Try positions in expanding circles around current position
+                    for (let radius = stepSize; radius <= searchRadius && !foundValidPosition; radius += stepSize) {
+                        for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 8) {
+                            const testX = this.player.x + Math.cos(angle) * radius;
+                            const testY = this.player.y + Math.sin(angle) * radius;
+                            
+                            // Check bounds
+                            if (testX >= 0 && testX <= this.gameWidth - 45 && 
+                                testY >= 0 && testY <= this.gameHeight - 60) {
+                                
+                                if (!this.checkWallCollision(testX, testY)) {
+                                    this.player.x = testX;
+                                    this.player.y = testY;
+                                    this.updatePlayerPosition();
+                                    foundValidPosition = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // If no valid position found nearby, move to center
+                    if (!foundValidPosition) {
+                        this.player.x = this.gameWidth / 2 - 22;
+                        this.player.y = this.gameHeight / 2 - 30;
+                        this.updatePlayerPosition();
+                    }
+                }
+            }
+
+            killBeast() {
+                this.beastKilled = true;
+                this.collectiblesAfterBeastKill = 0;
+                
+                // Hide beast
+                this.beast.style.display = 'none';
+                
+                // Remove beast from collision detection temporarily
+                this.beast.x = -100;
+                this.beast.y = -100;
+            }
+
+            respawnBeast() {
+                this.beastKilled = false;
+                this.beast.style.display = 'block';
+                
+                // Respawn beast in a random corner
+                const corners = [
+                    { x: 30, y: 30 },
+                    { x: this.gameWidth - 82, y: 30 },
+                    { x: 30, y: this.gameHeight - 97 },
+                    { x: this.gameWidth - 82, y: this.gameHeight - 97 }
+                ];
+                const randomCorner = corners[Math.floor(Math.random() * corners.length)];
+                this.beast.x = randomCorner.x;
+                this.beast.y = randomCorner.y;
+                this.updateBeastPosition();
+            }
+
+            moveBeast() {
+                if (!this.gameActive || this.beastKilled) return;
+                
+                // If player is in ghost mode, beast moves randomly
+                if (this.isPoweredUp && this.powerType === 'ghost') {
+                    // Random movement for beast when player is in ghost mode
+                    const randomAngle = Math.random() * 2 * Math.PI;
+                    let moveX = Math.cos(randomAngle) * this.beastSpeed;
+                    let moveY = Math.sin(randomAngle) * this.beastSpeed;
+                    
+                    let newBeastX = this.beast.x + moveX;
+                    let newBeastY = this.beast.y + moveY;
+                    
+                    // Keep beast within bounds
+                    newBeastX = Math.max(0, Math.min(this.gameWidth - 52, newBeastX));
+                    newBeastY = Math.max(0, Math.min(this.gameHeight - 67, newBeastY));
+                    
+                    // Check collision with walls
+                    if (!this.checkBeastWallCollision(newBeastX, newBeastY)) {
+                        this.beast.x = newBeastX;
+                        this.beast.y = newBeastY;
+                        this.updateBeastPosition();
+                    }
+                    
+                    // Always show beast as walking in ghost mode
+                    if (!this.beastIsWalking) {
+                        this.beastIsWalking = true;
+                        this.beast.classList.add('beast-walking');
+                    }
+                    
+                    return;
+                }
+                
+                // Calculate direction towards or away from player based on power-up status
+                const dx = this.player.x - this.beast.x;
+                const dy = this.player.y - this.beast.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    // Normalize direction
+                    let directionX = dx / distance;
+                    let directionY = dy / distance;
+                    
+                    // If player has strength power-up, beast runs away (reverse direction)
+                    if (this.isPoweredUp && this.powerType === 'strength') {
+                        directionX = -directionX;
+                        directionY = -directionY;
+                    }
+                    
+                    // Apply speed
+                    let moveX = directionX * this.beastSpeed;
+                    let moveY = directionY * this.beastSpeed;
+                    
+                    let newBeastX = this.beast.x + moveX;
+                    let newBeastY = this.beast.y + moveY;
+                    
+                    // Keep beast within bounds
+                    newBeastX = Math.max(0, Math.min(this.gameWidth - 52, newBeastX));
+                    newBeastY = Math.max(0, Math.min(this.gameHeight - 67, newBeastY));
+                    
+                    // Check collision with walls - if blocked, try alternative paths
+                    if (this.checkBeastWallCollision(newBeastX, newBeastY)) {
+                        // Try moving only horizontally
+                        let altX = this.beast.x + moveX;
+                        altX = Math.max(0, Math.min(this.gameWidth - 52, altX));
+                        
+                        if (!this.checkBeastWallCollision(altX, this.beast.y)) {
+                            newBeastX = altX;
+                            newBeastY = this.beast.y;
+                        } 
+                        // Try moving only vertically
+                        else {
+                            let altY = this.beast.y + moveY;
+                            altY = Math.max(0, Math.min(this.gameHeight - 67, altY));
+                            
+                            if (!this.checkBeastWallCollision(this.beast.x, altY)) {
+                                newBeastX = this.beast.x;
+                                newBeastY = altY;
+                            }
+                            // Try diagonal movements
+                            else {
+                                const alternatives = [
+                                    { x: this.beast.x + moveX * 0.7, y: this.beast.y + moveY * 0.3 },
+                                    { x: this.beast.x + moveX * 0.3, y: this.beast.y + moveY * 0.7 },
+                                    { x: this.beast.x + moveX * -0.3, y: this.beast.y + moveY * 0.7 },
+                                    { x: this.beast.x + moveX * 0.7, y: this.beast.y + moveY * -0.3 }
+                                ];
+                                
+                                for (const alt of alternatives) {
+                                    const clampedX = Math.max(0, Math.min(this.gameWidth - 52, alt.x));
+                                    const clampedY = Math.max(0, Math.min(this.gameHeight - 67, alt.y));
+                                    
+                                    if (!this.checkBeastWallCollision(clampedX, clampedY)) {
+                                        newBeastX = clampedX;
+                                        newBeastY = clampedY;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Update beast position and animation
+                    const wasWalking = this.beastIsWalking;
+                    const actualMoveX = newBeastX - this.beast.x;
+                    const actualMoveY = newBeastY - this.beast.y;
+                    this.beastIsWalking = (Math.abs(actualMoveX) > 0.1 || Math.abs(actualMoveY) > 0.1);
+                    
+                    // Update walking animation
+                    if (this.beastIsWalking && !wasWalking) {
+                        this.beast.classList.add('beast-walking');
+                    } else if (!this.beastIsWalking && wasWalking) {
+                        this.beast.classList.remove('beast-walking');
+                    }
+                    
+                    this.beast.x = newBeastX;
+                    this.beast.y = newBeastY;
+                    this.updateBeastPosition();
+                }
+            }
+
+            checkBeastWallCollision(beastX, beastY) {
+                const beastRect = {
+                    x: beastX,
+                    y: beastY,
+                    width: 52,
+                    height: 67
+                };
+
+                for (const wall of this.walls) {
+                    const wallRect = {
+                        x: wall.x,
+                        y: wall.y,
+                        width: wall.width,
+                        height: wall.height
+                    };
+
+                    if (this.isColliding(beastRect, wallRect)) {
+                        return true; // Collision detected
+                    }
+                }
+                return false; // No collision
+            }
+
+            createWalls() {
+                // Generate random walls for each game
+                const numWalls = 6 + Math.floor(Math.random() * 4); // 6-9 walls
+                const wallConfigs = [];
+                
+                for (let i = 0; i < numWalls; i++) {
+                    let validWall = false;
+                    let attempts = 0;
+                    
+                    while (!validWall && attempts < 50) { // Increased attempts for overlap checking
+                        const isVertical = Math.random() < 0.5;
+                        const wallConfig = {
+                            x: 75 + Math.random() * (this.gameWidth - 300),
+                            y: 75 + Math.random() * (this.gameHeight - 300),
+                            width: isVertical ? 30 + Math.random() * 22 : 90 + Math.random() * 120,
+                            height: isVertical ? 90 + Math.random() * 150 : 30 + Math.random() * 22
+                        };
+                        
+                        // Check if wall is too close to player starting position
+                        const playerStartX = this.gameWidth / 2 - 22;
+                        const playerStartY = this.gameHeight / 2 - 30;
+                        const distanceFromPlayer = Math.sqrt(
+                            Math.pow(wallConfig.x - playerStartX, 2) + 
+                            Math.pow(wallConfig.y - playerStartY, 2)
+                        );
+                        
+                        // Check if wall overlaps with existing walls
+                        let overlapsWithExisting = false;
+                        for (const existingWall of wallConfigs) {
+                            // Add margin around walls to prevent close placement
+                            const margin = 15;
+                            const expandedExisting = {
+                                x: existingWall.x - margin,
+                                y: existingWall.y - margin,
+                                width: existingWall.width + margin * 2,
+                                height: existingWall.height + margin * 2
+                            };
+                            
+                            if (this.isColliding(wallConfig, expandedExisting)) {
+                                overlapsWithExisting = true;
+                                break;
+                            }
+                        }
+                        
+                        if (distanceFromPlayer > 120 && !overlapsWithExisting) {
+                            validWall = true;
+                            wallConfigs.push(wallConfig);
+                        }
+                        attempts++;
+                    }
+                }
+
+                wallConfigs.forEach(config => {
+                    const wall = document.createElement('div');
+                    wall.className = 'wall';
+                    wall.style.left = `${config.x}px`;
+                    wall.style.top = `${config.y}px`;
+                    wall.style.width = `${config.width}px`;
+                    wall.style.height = `${config.height}px`;
+                    
+                    wall.x = config.x;
+                    wall.y = config.y;
+                    wall.width = config.width;
+                    wall.height = config.height;
+                    
+                    this.container.appendChild(wall);
+                    this.walls.add(wall);
+                });
+            }
+
+            movePlayer() {
+                if (!this.gameActive) return;
+                
+                let moved = false;
+                let newX = this.player.x;
+                let newY = this.player.y;
+                
+                if (this.keys.has('ArrowUp') && this.player.y > 0) {
+                    newY = Math.max(0, this.player.y - this.playerSpeed);
+                }
+                if (this.keys.has('ArrowDown') && this.player.y < this.gameHeight - 60) {
+                    newY = Math.min(this.gameHeight - 60, this.player.y + this.playerSpeed);
+                }
+                if (this.keys.has('ArrowLeft') && this.player.x > 0) {
+                    newX = Math.max(0, this.player.x - this.playerSpeed);
+                }
+                if (this.keys.has('ArrowRight') && this.player.x < this.gameWidth - 45) {
+                    newX = Math.min(this.gameWidth - 45, this.player.x + this.playerSpeed);
+                }
+
+                // Check collision with walls before moving (unless in ghost mode)
+                if (this.isPoweredUp && this.powerType === 'ghost') {
+                    // In ghost mode, player can pass through walls
+                    this.player.x = newX;
+                    this.player.y = newY;
+                    this.updatePlayerPosition();
+                } else if (!this.checkWallCollision(newX, newY)) {
+                    this.player.x = newX;
+                    this.player.y = newY;
+                    this.updatePlayerPosition();
+                }
+            }
+
+            checkWallCollision(playerX, playerY) {
+                const playerRect = {
+                    x: playerX,
+                    y: playerY,
+                    width: 45,
+                    height: 60
+                };
+
+                for (const wall of this.walls) {
+                    const wallRect = {
+                        x: wall.x,
+                        y: wall.y,
+                        width: wall.width,
+                        height: wall.height
+                    };
+
+                    if (this.isColliding(playerRect, wallRect)) {
+                        return true; // Collision detected
+                    }
+                }
+                return false; // No collision
+            }
+
+            spawnCollectible() {
+                if (!this.gameActive || this.collectibles.size > 0) return; // Only spawn if no collectibles exist
+                
+                // Determine if we should spawn a power-up crate (available regardless of beast status)
+                const shouldSpawnPowerUp = this.score > 5 && 
+                                         !this.lastSpawnWasPowerUp && 
+                                         Math.random() < 0.25; // 25% chance when score > 5
+                
+                const collectible = document.createElement('div');
+                
+                if (shouldSpawnPowerUp) {
+                    collectible.className = 'power-crate';
+                    collectible.isPowerUp = true;
+                    // Randomly choose power-up type
+                    collectible.powerType = Math.random() < 0.5 ? 'strength' : 'ghost';
+                    collectible.classList.add(collectible.powerType);
+                    this.lastSpawnWasPowerUp = true;
+                } else {
+                    collectible.className = 'collectible';
+                    collectible.isPowerUp = false;
+                    this.lastSpawnWasPowerUp = false;
+                }
+                
+                let validPosition = false;
+                let attempts = 0;
+                
+                // Find a position that doesn't collide with walls or player
+                while (!validPosition && attempts < 100) { // Increased attempts
+                    const margin = 45;
+                    collectible.x = margin + Math.random() * (this.gameWidth - margin * 2 - 30);
+                    collectible.y = margin + Math.random() * (this.gameHeight - margin * 2 - 30);
+                    
+                    const collectibleRect = {
+                        x: collectible.x,
+                        y: collectible.y,
+                        width: 30,
+                        height: 30
+                    };
+                    
+                    validPosition = true;
+                    
+                    // Check collision with walls
+                    for (const wall of this.walls) {
+                        const wallRect = {
+                            x: wall.x,
+                            y: wall.y,
+                            width: wall.width,
+                            height: wall.height
+                        };
+                        
+                        if (this.isColliding(collectibleRect, wallRect)) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    
+                    // Check distance from player (reduced requirement for easier spawning)
+                    const distanceFromPlayer = Math.sqrt(
+                        Math.pow(collectible.x - this.player.x, 2) + 
+                        Math.pow(collectible.y - this.player.y, 2)
+                    );
+                    
+                    if (distanceFromPlayer < 60) { // Reduced from 60 to 40
+                        validPosition = false;
+                    }
+                    
+                    // Check distance from beast
+                    const distanceFromBeast = Math.sqrt(
+                        Math.pow(collectible.x - this.beast.x, 2) + 
+                        Math.pow(collectible.y - this.beast.y, 2)
+                    );
+                    
+                    if (distanceFromBeast < 60) {
+                        validPosition = false;
+                    }
+                    
+                    attempts++;
+                }
+                
+                // If no valid position found after many attempts, use a simpler approach
+                if (!validPosition) {
+                    const fallbackPositions = [
+                        { x: 150, y: 150 },
+                        { x: this.gameWidth - 180, y: 150 },
+                        { x: 150, y: this.gameHeight - 180 },
+                        { x: this.gameWidth - 180, y: this.gameHeight - 180 },
+                        { x: this.gameWidth / 2, y: 150 },
+                        { x: this.gameWidth / 2, y: this.gameHeight - 180 }
+                    ];
+                    
+                    for (const pos of fallbackPositions) {
+                        collectible.x = pos.x;
+                        collectible.y = pos.y;
+                        
+                        const collectibleRect = {
+                            x: collectible.x,
+                            y: collectible.y,
+                            width: 30,
+                            height: 30
+                        };
+                        
+                        let collision = false;
+                        for (const wall of this.walls) {
+                            const wallRect = {
+                                x: wall.x,
+                                y: wall.y,
+                                width: wall.width,
+                                height: wall.height
+                            };
+                            
+                            if (this.isColliding(collectibleRect, wallRect)) {
+                                collision = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!collision) {
+                            validPosition = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!validPosition) {
+                    // Force spawn in center if all else fails
+                    collectible.x = this.gameWidth / 2;
+                    collectible.y = this.gameHeight / 2;
+                }
+                
+                collectible.style.left = `${collectible.x}px`;
+                collectible.style.top = `${collectible.y}px`;
+                
+                this.container.appendChild(collectible);
+                this.collectibles.add(collectible);
+
+                // Decrease lifetime as game progresses (minimum 1 second)
+                const lifetimeReduction = Math.floor(this.gameTime / 10000) * 500; // Reduce by 0.5s every 10 seconds
+                const lifetime = Math.max(1000, this.baseLifetime - lifetimeReduction);
+                
+                setTimeout(() => {
+                    if (this.collectibles.has(collectible)) {
+                        this.removeCollectible(collectible, false, true); // true = missed
+                    }
+                }, lifetime);
+            }
+
+            removeCollectible(collectible, collected = false, missed = false) {
+                if (!this.collectibles.has(collectible)) return;
+                
+                this.collectibles.delete(collectible);
+                
+                // Handle beast respawn counter
+                if (collected && !collectible.isPowerUp && this.beastKilled) {
+                    this.collectiblesAfterBeastKill++;
+                    if (this.collectiblesAfterBeastKill >= 3) {
+                        this.respawnBeast();
+                    }
+                }
+                
+                if (missed && this.gameActive) {
+                    // Reduce score when missing collectible
+                    this.score = Math.max(0, this.score - 1);
+                    this.scoreElement.textContent = `Score: ${this.score}`;
+                    
+                    // Check for game over
+                    if (this.score <= 0 && this.gameTime > 5000) { // Give 5 seconds grace period
+                        this.gameOver();
+                        return;
+                    }
+                }
+                
+                if (collected) {
+                    collectible.classList.add('fade-out');
+                    setTimeout(() => collectible.remove(), 500);
+                } else {
+                    collectible.remove();
+                }
+                
+                // Immediately spawn next collectible if game is still active
+                if (this.gameActive) {
+                    setTimeout(() => this.spawnCollectible(), 200); // Very short delay for immediate spawning
+                }
+            }
+
+            playCollectSound() {
+                // Create a simple collect sound using Web Audio API
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(1200, this.audioContext.currentTime + 0.1);
+                
+                gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
+                
+                oscillator.start(this.audioContext.currentTime);
+                oscillator.stop(this.audioContext.currentTime + 0.1);
+            }
+
+            gameOver() {
+                this.gameActive = false;
+                
+                // Clean up power-up and speed boost
+                this.deactivatePowerUp();
+                this.deactivateSpeedBoost();
+                
+                // Update max score if current score is higher
+                if (this.score > this.maxScore) {
+                    this.maxScore = this.score;
+                    localStorage.setItem('maxScore', this.maxScore.toString());
+                }
+                
+                // Always update the display to show the current max score
+                this.maxScoreElement.textContent = this.maxScore;
+                this.gameOverElement.style.display = 'block';
+                
+                // Stop all animations
+                this.player.classList.remove('walking');
+                this.beast.classList.remove('beast-walking');
+            }
+
+            checkCollisions() {
+                if (!this.gameActive) return;
+                
+                // Check player-collectible collisions
+                const playerRect = {
+                    x: this.player.x,
+                    y: this.player.y,
+                    width: 45,
+                    height: 60
+                };
+
+                for (const collectible of this.collectibles) {
+                    const collectibleRect = {
+                        x: collectible.x,
+                        y: collectible.y,
+                        width: collectible.isPowerUp ? 45 : 30,
+                        height: collectible.isPowerUp ? 45 : 30
+                    };
+
+                    if (this.isColliding(playerRect, collectibleRect)) {
+                        if (collectible.isPowerUp) {
+                            // Activate power-up with the specific type
+                            this.activatePowerUp(collectible.powerType);
+                        } else {
+                            // Regular collectible
+                            this.score++;
+                            this.scoreElement.textContent = `Score: ${this.score}`;
+                            if (this.score > this.maxScore) {
+                                this.maxScore = this.score;
+                                localStorage.setItem('maxScore', this.maxScore.toString());
+                            }
+                        }
+
+                        this.playCollectSound();
+                        this.removeCollectible(collectible, true);
+                        break;
+                    }
+                }
+                
+                // Check player-speed booster collisions
+                for (const speedBooster of this.speedBoosters) {
+                    const speedBoosterRect = {
+                        x: speedBooster.x,
+                        y: speedBooster.y,
+                        width: 45,
+                        height: 45
+                    };
+
+                    if (this.isColliding(playerRect, speedBoosterRect)) {
+                        // Activate speed boost
+                        this.activateSpeedBoost();
+                        this.playCollectSound();
+                        this.removeSpeedBooster(speedBooster, true);
+                        break;
+                    }
+                }
+                
+                // Check Beast-Player collision
+                if (!this.beastKilled) {
+                    const beastRect = {
+                        x: this.beast.x,
+                        y: this.beast.y,
+                        width: 52,
+                        height: 67
+                    };
+                    
+                    if (this.isColliding(playerRect, beastRect)) {
+                        if (this.isPoweredUp && this.powerType === 'strength') {
+                            // Player kills beast (only with strength power)
+                            this.killBeast();
+                        } else if (this.isPoweredUp && this.powerType === 'ghost') {
+                            // In ghost mode, player is invisible - no collision
+                            return;
+                        } else {
+                            // Beast kills player
+                            this.gameOverReason = "The Beast caught you!";
+                            this.gameOver();
+                        }
+                    }
+                }
+            }
+
+            isColliding(rect1, rect2) {
+                return rect1.x < rect2.x + rect2.width &&
+                       rect1.x + rect1.width > rect2.x &&
+                       rect1.y < rect2.y + rect2.height &&
+                       rect1.y + rect1.height > rect2.y;
+            }
+
+            gameLoop() {
+                if (this.gameActive) {
+                    this.movePlayer();
+                    this.moveBeast();
+                    this.checkCollisions();
+                }
+            }
+
+            startGameLoop() {
+                setInterval(() => this.gameLoop(), 16); // ~60 FPS
+            }
+        }
+
+        // Start the game when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new Game();
+        });
+    </script>
+</body>
+</html>
