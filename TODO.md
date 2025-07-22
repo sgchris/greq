@@ -38,3 +38,7 @@ add many tests for this case.
 16. input file parameter - check relative and absolute paths. If relative, use the current working directory as a base.
 
 17. Merge the request body with the base request body if the `merge-json-body` header is set to true.
+
+18. Add optional retries
+
+19

@@ -1,9 +1,13 @@
-use crate::greq_object::greq;
+// use crate::greq_object::greq;
 use crate::greq_object::greq_content::GreqContent;
 use crate::greq_object::greq_footer::GreqFooter;
 use crate::greq_object::greq_header::GreqHeader;
 use crate::greq_object::greq_response::GreqResponse;
-use crate::greq_object::greq_parser::{ extract_delimiter, parse_sections, parse_header_section, is_line_only_from_char };
+use crate::greq_object::greq_parser::{ 
+    parse_sections, 
+    parse_header_section, 
+    // is_line_only_from_char 
+};
 use crate::greq_object::greq_errors::GreqError;
 use crate::greq_object::greq_evaluator::GreqEvaluator;
 use crate::constants::{DEFAULT_DELIMITER_CHAR};
@@ -12,18 +16,7 @@ use reqwest::{ Client, Method };
 use serde::{Deserialize, Serialize};
 use crate::greq_object::traits::enrich_with_trait::EnrichWith;
 use std::fs;
-use std::collections::HashMap;
 use crate::cli::cli_tools::CliTools;
-
-#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct GreqExecutionResult {
-    pub succeeded: Option<bool>,
-
-    pub response_code: u16,
-    pub response_headers: HashMap<String, String>,
-    pub response_body: String,
-    pub response_milliseconds: u128,
-}
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Greq {
@@ -41,8 +34,6 @@ impl Greq {
     pub async fn process(
         file_path: &str, // absolute path to the file
         parse_only: Option<bool>, // if true, only parse the file without executing it
-        base_request: Option<&Greq>, // Greq object of the base request
-        dependency_response: Option<&GreqResponse>,
     ) -> Result<Self, GreqError> {
         // parse only is false by default
         let parse_only = parse_only.unwrap_or(false);
@@ -58,142 +49,115 @@ impl Greq {
         let header_lines = parse_header_section(&raw_file_contents)
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
-        let greq_header = GreqHeader::parse(&header_lines, file_path, None, None)
+        // initial parsing of the header, to extract the delimiter, the base 
+        // request that this greq extends, and the dependency request
+        let greq_basic_header = GreqHeader::parse(&header_lines, file_path, None, None)
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
+        // TODO: place the following segment in separate method
+        let mut dependency_execution_result_option: Option<GreqResponse> = None;
+        let mut base_request_option: Option<Greq> = None;
+        if greq_basic_header.extends.is_some() || greq_basic_header.depends_on.is_some() {
 
-        let mut dependency_execution_result = GreqExecutionResult::default();
-        if greq_header.extends.is_some() || greq_header.depends_on.is_some() {
-            if let Some(dependency_greq_file) = greq_header.depends_on {
-                let dependency_greq = Greq::process(
-                    &dependency_greq_file,
-                    Some(true), // parse only
-                    None, // base_request is not needed here
-                    None // dependency_response is not needed here
-                ).await.map_err(|e| {
-                        GreqError::ExecuteDependencyGreqFileError { 
-                            file_path: dependency_greq_file.to_string(), 
-                            reason: e.to_string() 
-                        }
-                    })?;
+            // load the dependency Greq file, and execute it if needed
+            if !parse_only {
+                if let Some(dependency_greq_file) = greq_basic_header.depends_on {
+                    // execute the dependency Greq file
+        //Box::pin(self.send_request_and_evaluate_response(show_response))
+                    let dependency_greq = Box::pin(Greq::process(
+                        &dependency_greq_file,
+                        Some(true) // parse the dependency file only
+                    )).await.map_err(|e| {
+                            GreqError::ExecuteDependencyGreqFileError { 
+                                file_path: dependency_greq_file.to_string(), 
+                                reason: e.to_string() 
+                            }
+                        })?;
 
-                // execute the dependency Greq file if parse_only is false
-                if !parse_only {
-                    dependency_execution_result = dependency_greq.boxed_execute(false).await.map_err(|e| {
-                        GreqError::ExecuteDependencyGreqFileError { 
-                            file_path: dependency_greq_file.to_string(), 
-                            reason: e.to_string() 
-                        }
-                    })?;
+                    // execute the dependency Greq file if parse_only is false
+                    // TODO: pass the correct "show response" value
+                    let show_response = false;
+                    let dependency_execution_result = dependency_greq
+                        .send_request_and_evaluate_response(show_response)
+                        .await
+                        .map_err(|e| {
+                            GreqError::ExecuteDependencyGreqFileError { 
+                                file_path: dependency_greq_file.to_string(), 
+                                reason: e.to_string() 
+                            }
+                        })?;
+
+                    // set for later use as a parameter for the current Greq
+                    dependency_execution_result_option = Some(dependency_execution_result);
                 }
             }
 
-            if let Some(base_request) = greq_header.extends {
-                let base_greq = Greq::process(greq_header.extends.unwrap().as_str(), None, None)
-                    .await
-                    .map_err(|e| GreqError::ErroLoadingBaseRequest { 
+            if let Some(base_request) = greq_basic_header.extends {
+                let base_greq = Box::pin(Greq::process(
+                    &base_request,
+                    Some(true) // parse the base request only
+                )).await.map_err(|e| GreqError::ErroLoadingBaseRequest { 
                         file_path: base_request.to_string(), 
                         reason: e.to_string() 
                     })?;
+
+                base_request_option = Some(base_greq);
             }
         }
 
-        //let sections = parse_sections(&raw_file_contents, greq_header.delimiter)?;
+        // parse the lines and place them in 3 strings vectors
+        let sections = parse_sections(&raw_file_contents, greq_basic_header.delimiter)?;
 
+        // re-parse the header lines with the base request and dependency execution result
+        let raw_header_lines = sections.get(0)
+            .ok_or(GreqError::ParsingHeaderSectionFailed { 
+                reason: "Header section is missing".to_string() 
+            })?;
+        let greq_header = GreqHeader::parse(
+            &raw_header_lines, 
+            file_path,
+            base_request_option.as_ref().map(|g| &g.header),
+            dependency_execution_result_option.as_ref()
+        ).map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
-        // parse the header to check if a custom delimiter was defined
-        GreqHeader::parse(&file_contents, file_path, None, None)
-            .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
+        // parse the content section
+        let raw_content_lines = sections.get(1)
+            .ok_or(GreqError::ParsingContentSectionFailed {
+                reason: "Content section is missing".to_string() 
+            })?;
+        let greq_content = GreqContent::parse(
+            &raw_content_lines,
+            base_request_option.as_ref().map(|g| &g.content),
+            dependency_execution_result_option.as_ref()
+        ).map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
-        Ok(Greq::default())
-    }
+        // parse the footer section
+        let raw_footer_lines = sections.get(2)
+            .ok_or(GreqError::ParsingFooterSectionFailed {
+                reason: "footer section is missing".to_string() 
+            })?;
+        let greq_footer = GreqFooter::parse(
+            &raw_footer_lines,
+            base_request_option.as_ref().map(|g| &g.footer),
+            dependency_execution_result_option.as_ref()
+        ).map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
-    // Add a new boxed version of the `execute` function to handle recursion.
-    pub fn parse(raw_file_contents: &str) -> Result<Self, GreqError> {
-        // initialize a new Greq object with the original file contents
-        let mut greq = Greq {
-            file_contents: raw_file_contents.to_string(),
-            ..Default::default()
+        let greq = Greq {
+            file_contents: raw_file_contents,
+            sections_delimiter: greq_basic_header.delimiter,
+            header: greq_header,
+            content: greq_content,
+            footer: greq_footer,
         };
-
-        // check if a custom delimiter was defined in the file, using "delimiter" header.
-        let delimiter_char = extract_delimiter(raw_file_contents).unwrap_or(DEFAULT_DELIMITER_CHAR);
-        greq.sections_delimiter = delimiter_char;
-
-        // greq file must have 3 sections. 
-        // the header (metadata), content (http raw request), and footer (the evaluation conditions)
-        let sections = parse_sections(raw_file_contents, greq.sections_delimiter)?;
-
-        print!("parsing header...");
-        let greq_header_parsing_result = GreqHeader::parse(&sections[0]);
-        if let Err(greq_header_parsing_error) = greq_header_parsing_result {
-            CliTools::print_red("failed");
-            CliTools::print_red(&greq_header_parsing_error.to_string());
-            return Err(GreqError::ParsingHeaderSectionFailed { 
-                reason: greq_header_parsing_error.to_string()
-            });
-        }
-        
-        greq.header = GreqHeader::parse(&sections[0])
-            .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
-        CliTools::print_green("done");
-
-        print!("parsing content...");
-        greq.content = GreqContent::parse(&sections[1])
-            .map_err(|e| GreqError::ParsingContentSectionFailed { reason: e.to_string() })?;
-        // set the default protocol to https
-        CliTools::print_green("done");
-
-        print!("parsing footer...");
-        greq.footer = GreqFooter::parse(&sections[2])
-            .map_err(|_e| GreqError::ParsingFooterSectionFailed { reason: "Error parsing the footer section".to_string() })?;
-        CliTools::print_green("done");
-
-        Ok(greq)
-    }
-
-    // Load a Greq object from a file
-    pub fn from_file(file_path: &str) -> Result<Greq, GreqError> {
-        if !file_path.ends_with(".greq") {
-            return Err(GreqError::ReadGreqFileError { 
-                file_path: file_path.to_string(),
-                reason: "File must have a .greq extension".to_string()
-            });
-        }
-
-        // check that the file exists 
-        if !fs::metadata(file_path).is_ok() {
-            return Err(GreqError::ReadGreqFileError { 
-                file_path: file_path.to_string(), 
-                reason: "File does not exist".to_string() 
-            });
-        }
-
-        let file_contents = fs::read_to_string(file_path).map_err(|e| {
-            GreqError::ReadGreqFileError { 
-                file_path: file_path.to_string(), 
-                reason: e.to_string() 
-            }
-        })?;
-
-        // parse the file contents into a Greq object
-        let mut greq = Greq::parse(&file_contents)?;
-
-        // load the base request if specified
-        // "ref" is used to avoid cloning the string unnecessarily
-        if let Some(base_request_path) = greq.header.extends.clone() {
-            let base_greq = Greq::from_file(&base_request_path)?;
-
-            // merge the base request into the current request
-            greq.enrich_with(&base_greq)
-                .map_err(|e| GreqError::EnrichmentFailed { dependency: base_request_path.to_string(), reason: e.to_string() })?;
-        }
 
         Ok(greq)
     }
 
     /// execute the request and return the evaluation result and the raw response.
-    pub async fn send_request_and_evaluate_response(&self, show_response: bool) -> Result<GreqExecutionResult, GreqError> {
+    pub async fn send_request_and_evaluate_response(
+        &self,
+        show_response: bool
+    ) -> Result<GreqResponse, GreqError> {
         let greq_response: GreqResponse = self.get_response().await.map_err(|e| {
             GreqError::HttpError { message: e }
         })?;
@@ -219,14 +183,7 @@ impl Greq {
 
         let evaluation_result = evaluation_result_object.unwrap();
 
-        Ok(GreqExecutionResult {
-            succeeded: Some(evaluation_result), 
-            // successful
-            response_code: greq_response.status_code,
-            response_headers: greq_response.headers.clone(),
-            response_body: greq_response.body.unwrap_or_default(),
-            response_milliseconds: 0, // Placeholder for now, can be set later if needed
-        })
+        Ok(greq_response)
     }
 
     /// send an HTTP request using Reqwest and return the response.
@@ -351,7 +308,7 @@ impl Greq {
 
     /// Execute the request and return a boxed future.
     /// This is useful for recursive calls where the return type needs to be boxed.
-    fn boxed_execute(&self, show_response: bool) -> BoxFuture<'_, Result<GreqExecutionResult, GreqError>> {
+    fn boxed_execute(&self, show_response: bool) -> BoxFuture<'_, Result<GreqResponse, GreqError>> {
         Box::pin(self.send_request_and_evaluate_response(show_response))
     }
 

@@ -79,11 +79,6 @@ impl GreqHeader {
         // convert header_lines to COW (changeable on write) strings
         let mut cow_header_lines = strs_to_cows(header_lines);
 
-        // replace placeholders in the header lines with values from the dependency response
-        if let Some(dependency_response_obj) = dependency_response {
-            replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
-        }
-
         // parse the header lines and initialize the GreqHeader object
         let mut greq_header = GreqHeader::parse_lines_into_greq_header_object(&cow_header_lines)?;
         greq_header.absolute_path = greq_file_path.to_string();

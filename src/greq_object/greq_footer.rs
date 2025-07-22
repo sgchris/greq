@@ -59,11 +59,6 @@ impl GreqFooter {
         // convert COW (changeable on write) strings
         let mut cow_lines = strs_to_cows(footer_lines);
 
-        // replace placeholders in the content lines with values from the dependency response
-        if let Some(dependency_response_obj) = dependency_response {
-            replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
-        }
-
         // loop through each line in the footer
         // Skip empty lines and comments, they aren't relevant for conditions
         let mut conditions: Vec<GreqFooterCondition> = Vec::new();

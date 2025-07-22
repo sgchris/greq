@@ -57,11 +57,6 @@ impl GreqContent {
         // convert COW (changeable on write) strings
         let mut cow_lines = strs_to_cows(content_lines);
 
-        // replace placeholders in the content lines with values from the dependency response
-        if let Some(dependency_response_obj) = dependency_response {
-            replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
-        }
-
         // parse the content lines and initialize the GreqContent object
         let mut greq_content = GreqContent::parse_lines_into_greq_content_object(&cow_lines)?;
 

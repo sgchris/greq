@@ -8,6 +8,7 @@ pub struct GreqResponse {
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
     pub response_milliseconds: u64,
+    pub evaluation_result: bool,
 }
 
 impl GreqResponse {
@@ -15,6 +16,11 @@ impl GreqResponse {
         match var {
             "status_code" => self.status_code.to_string(),
             "reason_phrase" => self.reason_phrase.clone(),
+            "evaluation_result" => if self.evaluation_result { 
+                "true".to_string() 
+            } else { 
+                "false".to_string() 
+            },
             "headers" => serde_json::to_string(&self.headers).unwrap(),
             h if h.starts_with("header.") => {
                 let header_name = &h[7..]; // Remove "header." prefix
