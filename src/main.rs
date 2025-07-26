@@ -27,7 +27,6 @@ mod greq_object;
 
 use clap::Parser;
 use cli::CliParameters;
-use greq::cli::cli_tools::CliTools;
 use greq_object::greq::Greq;
 
 #[tokio::main]
@@ -41,7 +40,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     for input_file in &args.input_files {
-        if let Err(e) = process_input_file(input_file).await {
+        if let Err(e) = process_input_file(input_file, &args).await {
             println!("Error processing file '{}': {}", input_file, e);
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
         }
@@ -51,7 +50,7 @@ async fn main() -> std::io::Result<()> {
 }
 
 /// Process a single input file and return a Greq object.
-pub async fn process_input_file(input_file: &str) -> Result<Greq, String> {
+pub async fn process_input_file(input_file: &str, args: &CliParameters) -> Result<Greq, String> {
     // parse the input file and initialize the Greq object
     // TODO: Move that part to another async method to handle multiple files simultaneously
     let greq_initialization_result = Greq::from_file(&input_file, None, None).await;

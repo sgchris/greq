@@ -10,7 +10,6 @@ use crate::greq_object::greq_parser::{
 };
 use crate::greq_object::greq_errors::GreqError;
 use crate::greq_object::greq_evaluator::GreqEvaluator;
-use crate::constants::{DEFAULT_DELIMITER_CHAR};
 use futures::future::BoxFuture;
 use reqwest::{ Client, Method };
 use serde::{Deserialize, Serialize};
@@ -34,7 +33,7 @@ impl Greq {
     pub async fn process(
         file_path: &str, // absolute path to the file
         parse_only: Option<bool>, // if true, only parse the file without executing it
-    ) -> Result<Self, GreqError> {
+    ) -> Result<(Option<GreqResponse>, Self), GreqError> {
         // parse only is false by default
         let parse_only = parse_only.unwrap_or(false);
 
@@ -46,15 +45,17 @@ impl Greq {
             }
         })?;
 
+        // take only the header section of the file
         let header_lines = parse_header_section(&raw_file_contents)
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
         // initial parsing of the header, to extract the delimiter, the base 
         // request that this greq extends, and the dependency request
+        // The paths are replaced with absolute paths
         let greq_basic_header = GreqHeader::parse(&header_lines, file_path, None, None)
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
-        // TODO: place the following segment in separate method
+        // load the dependency and the base request if they are specified
         let mut dependency_execution_result_option: Option<GreqResponse> = None;
         let mut base_request_option: Option<Greq> = None;
         if greq_basic_header.extends.is_some() || greq_basic_header.depends_on.is_some() {
@@ -63,8 +64,7 @@ impl Greq {
             if !parse_only {
                 if let Some(dependency_greq_file) = greq_basic_header.depends_on {
                     // execute the dependency Greq file
-        //Box::pin(self.send_request_and_evaluate_response(show_response))
-                    let dependency_greq = Box::pin(Greq::process(
+                    let (dependency_response, dependency_greq_object) = Box::pin(Greq::process(
                         &dependency_greq_file,
                         Some(true) // parse the dependency file only
                     )).await.map_err(|e| {
@@ -77,8 +77,8 @@ impl Greq {
                     // execute the dependency Greq file if parse_only is false
                     // TODO: pass the correct "show response" value
                     let show_response = false;
-                    let dependency_execution_result = dependency_greq
-                        .send_request_and_evaluate_response(show_response)
+                    let dependency_execution_result = dependency_greq_object
+                        .send_request_and_evaluate_response()
                         .await
                         .map_err(|e| {
                             GreqError::ExecuteDependencyGreqFileError { 
@@ -93,7 +93,8 @@ impl Greq {
             }
 
             if let Some(base_request) = greq_basic_header.extends {
-                let base_greq = Box::pin(Greq::process(
+                // The first one is the response, which is not relevant here
+                let (_, base_greq) = Box::pin(Greq::process(
                     &base_request,
                     Some(true) // parse the base request only
                 )).await.map_err(|e| GreqError::ErroLoadingBaseRequest { 
@@ -150,26 +151,28 @@ impl Greq {
             footer: greq_footer,
         };
 
-        Ok(greq)
+        if !parse_only {
+            // if parse_only is false, execute the request and return the response
+            let response = greq.boxed_execute().await?;
+            return Ok((Some(response), greq));
+        }
+
+        Ok((None, greq))
     }
 
     /// execute the request and return the evaluation result and the raw response.
     pub async fn send_request_and_evaluate_response(
         &self,
-        show_response: bool
     ) -> Result<GreqResponse, GreqError> {
         let greq_response: GreqResponse = self.get_response().await.map_err(|e| {
             GreqError::HttpError { message: e }
         })?;
 
-        if show_response {
-            // if the user wants to see the response, print it
-            let response_as_json = serde_json::to_string_pretty(&greq_response)
-                .unwrap_or_else(|_| String::from("{}"));
-            println!("Response:\r\n{}", response_as_json);
-        }
+        // Log the response with the required log level
+        let response_as_json = serde_json::to_string_pretty(&greq_response)
+            .unwrap_or_else(|_| String::from("{}"));
+        println!("Response:\r\n{}", response_as_json);
 
-        print!("evaluating conditions... ");
         let evaluation_result_object = self.evaluate(&greq_response);
         if let Err(evaluation_error) = evaluation_result_object {
             CliTools::print_red("failed");
@@ -308,8 +311,8 @@ impl Greq {
 
     /// Execute the request and return a boxed future.
     /// This is useful for recursive calls where the return type needs to be boxed.
-    fn boxed_execute(&self, show_response: bool) -> BoxFuture<'_, Result<GreqResponse, GreqError>> {
-        Box::pin(self.send_request_and_evaluate_response(show_response))
+    fn boxed_execute(&self) -> BoxFuture<'_, Result<GreqResponse, GreqError>> {
+        Box::pin(self.send_request_and_evaluate_response())
     }
 
     /// Get the full URL of the request, including protocol, host, custom port if needed, and URI.
