@@ -1,7 +1,12 @@
-use std::{collections::HashMap};
+use std::{
+    collections::HashMap,
+    borrow::Cow,
+};
 use regex::Regex;
-use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
+use crate::constants::{
+    DEFAULT_HTTP_VERSION, NEW_LINE
+};
 use crate::greq_object::{
     greq_parser::{
         replace_placeholders_in_lines,
@@ -11,8 +16,8 @@ use crate::greq_object::{
     traits::enrich_with_trait::EnrichWith
 };
 use thiserror::Error;
-use crate::constants::{DEFAULT_HTTP_VERSION, NEW_LINE};
 
+/// define the errors that can occur during the parsing of GreqContent
 #[derive(Debug, PartialEq, Error)]
 pub enum GreqContentError {
     #[error("Invalid request line format: {line}")]
@@ -37,6 +42,7 @@ pub enum GreqContentError {
     InvalidHeaderLine { line: String },
 }
 
+/// the content section of the Greq file - parsed raw HTTP request
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct GreqContent {
     pub method: String,
@@ -74,7 +80,6 @@ impl GreqContent {
 
         Ok(greq_content)
     }
-
 
     /// Content lines might be imcomplete in case when the "extends" header is used
     /// Therefore, the validation isn't strict.
@@ -122,7 +127,7 @@ impl GreqContent {
             if reached_request_body {
                 body_lines.push(line)
             } else if let Some((key, value)) = line.split_once(':').map(|(k, v)| (k.trim(), v.trim())) {
-                GreqContent::parse_header_line(
+                GreqContent::parse_single_header_line(
                     &mut greq_content, 
                     key, 
                     value, 
@@ -142,9 +147,68 @@ impl GreqContent {
         Ok(greq_content)
     }
 
+    /// Parses the first line of the request to extract method, URI, and HTTP version.
+    fn parse_request_line(request_line: &str) -> Result<(&str, &str, &str), GreqContentError> {
+        // Parse the request line.
+        // (the first line of the content, e.g. "GET /index.html HTTP/1.1")
+        let request_parts = request_line.split_whitespace().collect::<Vec<&str>>();
+
+        // check that it has at least 2 parts (method and URI)
+        if request_parts.len() < 2 || request_parts.len() > 3 {
+            return Err(GreqContentError::InvalidRequestLine {
+                line: request_line.to_string(),
+            });
+        }
+
+        // parse and validate the method (GET/POST/...)
+        let method = request_parts[0];
+        if !Self::is_valid_http_method(method) {
+            return Err(GreqContentError::InvalidHttpMethod { method: method.to_string() });
+        }
+
+        // Parse the URI
+        let uri = request_parts[1];
+
+        // Check for invalid characters (basic validation)
+        // Allow alphanumeric, path separators, query params, and common URL-safe chars
+        let re = Regex::new(r"^[a-zA-Z0-9\-\._~:/\?#\[\]@!$&'\(\)\*\+,;=%]+$").unwrap();
+        if !re.is_match(uri) {
+            return Err(GreqContentError::InvalidUri { uri: uri.to_string() });
+        }
+
+        // Parse the HTTP version
+        let http_version = if request_parts.len() > 2 {
+            request_parts[2]
+        } else {
+            DEFAULT_HTTP_VERSION
+        };
+
+        if !Self::is_valid_http_version(http_version) {
+            return Err(GreqContentError::InvalidHttpVersion);
+        }
+
+        Ok((method, uri, http_version))
+    }
+
+    /// Validates if the provided HTTP method is one of the standard methods.
+    fn is_valid_http_method(method: &str) -> bool {
+        let valid_methods = [
+            "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"
+        ];
+
+        valid_methods.contains(&method)
+    }
+
+    /// Validates if the provided HTTP version is in the correct format "HTTP/x.y"
+    fn is_valid_http_version(version: &str) -> bool {
+        // Define the regex pattern for "HTTP/x.y" format
+        let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
+        re.is_match(version)
+    }
+
     // parse a single header line and update the GreqContent object
     // if the header is "host", it also updates the hostname and port
-    fn parse_header_line(
+    fn parse_single_header_line(
         greq_content: &mut GreqContent,
         key: &str,
         value: &str,
@@ -188,45 +252,6 @@ impl GreqContent {
 
         Ok(())
     }
-
-    /// Parses the first line of the request to extract method, URI, and HTTP version.
-    fn parse_request_line(request_line: &str) -> Result<(&str, &str, &str), GreqContentError> {
-        // Parse the request line.
-        // (the first line of the content, e.g. "GET /index.html HTTP/1.1")
-        let request_parts = request_line.split_whitespace().collect::<Vec<&str>>();
-
-        // check that it has at least 2 parts (method and URI)
-        if request_parts.len() < 2 || request_parts.len() > 3 {
-            return Err(GreqContentError::InvalidRequestLine {
-                line: request_line.to_string(),
-            });
-        }
-
-        // parse and validate the method (GET/POST/...)
-        let method = request_parts[0];
-        if !Self::method_is_valid(method) {
-            return Err(GreqContentError::InvalidHttpMethod { method: method.to_string() });
-        }
-
-        // Parse the URI
-        let uri = request_parts[1];
-
-        // Check for invalid characters (basic validation)
-        // Allow alphanumeric, path separators, query params, and common URL-safe chars
-        let re = Regex::new(r"^[a-zA-Z0-9\-\._~:/\?#\[\]@!$&'\(\)\*\+,;=%]+$").unwrap();
-        if !re.is_match(uri) {
-            return Err(GreqContentError::InvalidUri { uri: uri.to_string() });
-        }
-
-        // Parse the HTTP version
-        let http_version = if request_parts.len() > 2 {
-            request_parts[2]
-        } else {
-            DEFAULT_HTTP_VERSION
-        };
-
-        Ok((method, uri, http_version))
-    }
 }
 
 impl EnrichWith for GreqContent {
@@ -257,24 +282,6 @@ where
         }
 
         Ok(())
-    }
-}
-
-impl GreqContent {
-    /// Validates if the provided HTTP method is one of the standard methods.
-    pub fn method_is_valid(method: &str) -> bool {
-        let valid_methods = [
-            "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"
-        ];
-
-        valid_methods.contains(&method)
-    }
-
-    /// Validates if the provided HTTP version is in the correct format "HTTP/x.y"
-    pub fn is_valid_http_version(version: &str) -> bool {
-        // Define the regex pattern for "HTTP/x.y" format
-        let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
-        re.is_match(version)
     }
 }
 

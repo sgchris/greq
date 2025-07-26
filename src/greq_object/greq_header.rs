@@ -150,7 +150,7 @@ impl GreqHeader {
                         _ => return Err(GreqHeaderError::InvalidHeaderValue { line: line.to_string() }),
                     };
                 }
-                "base-request" => {
+                "extends" => {
                     greq_header.extends = Some(header_value.to_string());
                 }
                 "depends-on" => {
