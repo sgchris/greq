@@ -103,7 +103,7 @@ impl GreqHeader {
     }
 
     /// parse the lines that are related to the header of the request
-    fn parse_lines_into_greq_header_object(header_lines: &Vec<Cow<str>>) -> Result<GreqHeader, GreqHeaderError> {
+    pub fn parse_lines_into_greq_header_object(header_lines: &Vec<Cow<str>>) -> Result<GreqHeader, GreqHeaderError> {
         // initialize the object
         let mut greq_header = GreqHeader::default();
 
