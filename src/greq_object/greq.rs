@@ -30,6 +30,8 @@ pub struct Greq {
 }
 
 impl Greq {
+
+    // TODO: split to parse_only and execute methods (same method with a flag)
     pub async fn process(
         file_path: &str, // absolute path to the file
         parse_only: Option<bool>, // if true, only parse the file without executing it
@@ -63,32 +65,17 @@ impl Greq {
             // load the dependency Greq file, and execute it if needed
             if !parse_only {
                 if let Some(dependency_greq_file) = greq_basic_header.depends_on {
-                    // execute the dependency Greq file
-                    let (dependency_response, dependency_greq_object) = Box::pin(Greq::process(
+                    // execute the dependency Greq file, Greq object is not relevant
+                    let (_dependency_execution_result_option, _) = Box::pin(Greq::process(
                         &dependency_greq_file,
-                        Some(true) // parse the dependency file only
+                        Some(false) // execute normally
                     )).await.map_err(|e| {
                             GreqError::ExecuteDependencyGreqFileError { 
                                 file_path: dependency_greq_file.to_string(), 
                                 reason: e.to_string() 
                             }
                         })?;
-
-                    // execute the dependency Greq file if parse_only is false
-                    // TODO: pass the correct "show response" value
-                    let show_response = false;
-                    let dependency_execution_result = dependency_greq_object
-                        .send_request_and_evaluate_response()
-                        .await
-                        .map_err(|e| {
-                            GreqError::ExecuteDependencyGreqFileError { 
-                                file_path: dependency_greq_file.to_string(), 
-                                reason: e.to_string() 
-                            }
-                        })?;
-
-                    // set for later use as a parameter for the current Greq
-                    dependency_execution_result_option = Some(dependency_execution_result);
+                    dependency_execution_result_option = _dependency_execution_result_option;
                 }
             }
 
@@ -184,8 +171,6 @@ impl Greq {
             CliTools::print_green("done");
         }
 
-        let evaluation_result = evaluation_result_object.unwrap();
-
         Ok(greq_response)
     }
 
@@ -231,6 +216,7 @@ impl Greq {
         let response = raw_response.unwrap();
 
         let mut greq_response = GreqResponse {
+            evaluation_result: false,
             status_code: response.status().as_u16(),
             reason_phrase: response.status().canonical_reason().unwrap_or("Unknown").to_string(),
             headers: response

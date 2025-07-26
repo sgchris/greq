@@ -40,7 +40,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     for input_file in &args.input_files {
-        if let Err(e) = process_input_file(input_file, &args).await {
+        if let Err(e) = process_input_file(input_file).await {
             println!("Error processing file '{}': {}", input_file, e);
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
         }
@@ -50,56 +50,22 @@ async fn main() -> std::io::Result<()> {
 }
 
 /// Process a single input file and return a Greq object.
-pub async fn process_input_file(input_file: &str, args: &CliParameters) -> Result<Greq, String> {
+#[inline]
+pub async fn process_input_file(input_file: &str) -> Result<Greq, String> {
     // parse the input file and initialize the Greq object
     // TODO: Move that part to another async method to handle multiple files simultaneously
-    let greq_initialization_result = Greq::from_file(&input_file, None, None).await;
-    if let Err(e) = greq_initialization_result {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
-    }
-    let greq = greq_initialization_result.unwrap();
+    let (greq_response, greq) = Greq::process(&input_file, None).await.map_err(|e| {
+        format!("Failed to process input file '{}': {}", input_file, e)
+    })?;
 
-    // Only display the `greq` object without executing it
-    // Used when base_request is provided and the user wants to see the merged request
-    if args.show_request_only {
-        let greq_as_json = serde_json::to_string_pretty(&greq).unwrap_or(String::from("{}"));
-        println!("Parse result:\r\n{}", greq_as_json);
-        return Ok(());
-    }
-
-    if args.skip_evaluation {
-        // get only the response
-        let response = greq.get_response().await;
-
-        if response.is_ok() {
-            let response_as_json = serde_json::to_string_pretty(&response).unwrap_or(String::from("{}"));
-
-            if args.show_response {
-                // if the user wants to see the response, print it
-                println!("Response:\r\n{}", response_as_json);
-            }
-        } else {
-            println!("ERROR: {}", response.unwrap_err());
-        }
-
-        return Ok(());
-    }
-
-    // execute greq object
-    let execution_result_obj = greq.execute(args.show_response).await.map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-    });
-
-    println!();
-    if execution_result_obj.is_err() {
-        // if the execution failed, print the error
-        CliTools::print_red("Failure");
+    println!("Processed file: {}", input_file);
+    if let Some(unwrapped_response) = greq_response {
+        println!("Took {}ms", unwrapped_response.response_milliseconds);
     } else {
-        // if the execution was successful, print the success message
-        CliTools::print_green("Success");
+        println!("No response received.");
     }
 
-    Ok(())
+    Ok(greq)
 }
 
 

@@ -1,10 +1,11 @@
-use std::{collections::HashMap, intrinsics::const_eval_select};
+use std::{collections::HashMap};
 use regex::Regex;
 use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 use crate::greq_object::{
-    greq::Greq, greq_parser::{
-        replace_placeholders_in_lines, resolve_and_check_file_exists, strs_to_cows
+    greq_parser::{
+        replace_placeholders_in_lines,
+        strs_to_cows
     }, 
     greq_response::GreqResponse, 
     traits::enrich_with_trait::EnrichWith

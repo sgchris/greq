@@ -96,7 +96,7 @@ impl GreqHeader {
 
         // After the header was enriched with the base request,
         if greq_header.depends_on.is_some() {
-            GreqHeader::check_and_update_depends_on(&mut greq_header);
+            GreqHeader::check_and_update_depends_on(&mut greq_header)?;
         }
 
         Ok(greq_header)
