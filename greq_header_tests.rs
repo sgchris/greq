@@ -21,7 +21,7 @@ fn test_parse_lines_success_scenarios() {
     let lines = vec![
         "project: MyProject",
         "depends-on: auth_request", 
-        "base-request: base.greq",
+        "extends: base.greq",
         "is-http: true",
         "delimiter: |"
     ];
@@ -43,7 +43,7 @@ fn test_parse_lines_success_scenarios() {
         "IS-HTTP: false",
         "   ",  // empty line
         "\t\t",  // whitespace only
-        "Base-Request:base.greq"  // no spaces around colon
+        "extends:base.greq"  // no spaces around colon
     ];
     let result = GreqHeader::parse_lines_into_greq_header_object(&greq::greq_object::greq_parser::strs_to_cows(&lines));
     assert!(result.is_ok());
@@ -140,7 +140,7 @@ fn test_full_parse_with_file_operations() {
     // Test 1: Successful parse with file validation
     let lines = vec![
         "project: TestProject",
-        "base-request: base",  // without .greq extension
+        "extends: base",  // without .greq extension
         "depends-on: depends.greq"
     ];
     
@@ -152,8 +152,8 @@ fn test_full_parse_with_file_operations() {
     assert!(header.extends.is_some());
     assert!(header.depends_on.is_some());
 
-    // Test 2: File not found error for base-request
-    let lines = vec!["base-request: nonexistent"];
+    // Test 2: File not found error for extends
+    let lines = vec!["extends: nonexistent"];
     let result = GreqHeader::parse(&lines, current_file.to_str().unwrap(), None, None);
     assert!(matches!(result, Err(GreqHeaderError::FileDoesNotExist { .. })));
 
