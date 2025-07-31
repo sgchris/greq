@@ -5,7 +5,7 @@ use crate::greq_object::greq_header::GreqHeader;
 use crate::greq_object::greq_response::GreqResponse;
 use crate::greq_object::greq_parser::{ 
     parse_sections, 
-    parse_header_section, 
+    get_header_section_lines, 
     // is_line_only_from_char 
 };
 use crate::greq_object::greq_errors::GreqError;
@@ -48,7 +48,7 @@ impl Greq {
         })?;
 
         // take only the header section of the file
-        let header_lines = parse_header_section(&raw_file_contents)
+        let header_lines = get_header_section_lines(&raw_file_contents)
             .map_err(|e| GreqError::ParsingHeaderSectionFailed { reason: e.to_string() })?;
 
         // initial parsing of the header, to extract the delimiter, the base 

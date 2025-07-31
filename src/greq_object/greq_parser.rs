@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::io; 
 use std::env;
+use fancy_regex::Regex;
 
 use crate::constants::{DELIMITER_MIN_LENGTH, COMMENT_PREFIX};
 use crate::greq_object::{
@@ -11,32 +12,35 @@ use crate::greq_object::{
 
 
 /// Parse the first section (header) only. until a generic delimiter is found.
-pub fn parse_header_section(content: &str) -> Result<Vec<&str>, GreqError> {
+pub fn get_header_section_lines(content: &str) -> Result<Vec<&str>, GreqError> {
     // split the content into lines and trim them
-    let lines: Vec<&str> = content.lines().map(|the_line| the_line.trim()).collect();
+    let lines: Vec<&str> = content.lines()
+        .map(|the_line| the_line.trim()) // trim
+        .filter(|the_line| !the_line.is_empty()) // remove empty (for the header it's ok)
+        .collect();
 
     // Initialize a vector to hold the header lines
     let mut header_lines: Vec<&str> = Vec::new();
 
     for line in lines.iter() {
-        // skip empty lines in the beginning of the header section
-        if line.is_empty() && header_lines.is_empty() {
-            continue; 
-        }
+        println!("Parsing line: {}", line); // Debugging line
 
         // skip comment lines that start with "--"
         // TODO: enable custom delimiter that is non alphanumeric char not a comment
         if line.starts_with(COMMENT_PREFIX) {
+            println!("Skipping comment line: {}", line); // Debugging line
             continue; // skip comment lines
         }
 
         // check if the first char is not a letter or digit, which indicates a delimiter
         let first_char = line.chars().next().unwrap();
         if !first_char.is_alphanumeric() && is_line_only_from_char(line, first_char) {
+            println!("Found delimiter line: {}", line); // Debugging line
             break; // stop parsing if the line is a delimiter
         }
 
         header_lines.push(line);
+        println!("Added header line: {}", line); // Debugging line
     }
 
     Ok(header_lines)
@@ -80,6 +84,10 @@ pub fn parse_sections(content: &str, delimiter: char) -> Result<[Vec<&str>; 3], 
 /// The line may contain whitespace characters.
 #[inline]
 pub fn is_line_only_from_char(line: &str, character: char) -> bool {
+    if line.is_empty() {
+        return false; // empty lines are not considered valid
+    }
+
     line.chars().all(|c| c.is_whitespace() || c == character)
 }
 
@@ -98,16 +106,16 @@ pub fn replace_placeholders_in_lines(
     greq_response: &GreqResponse,
 ) {
     // regex that finds "$(variable_name)" in the line, without escaping
-    let re = regex::Regex::new(r"(?<!\\)\$\(([^)]+)\)").unwrap();
+    let re = Regex::new(r"(?<!\\)\$\(([^)]+)\)").unwrap();
 
     // replace the placeholders in the header lines
     for line in lines.iter_mut() {
-        if !re.is_match(line) {
+        if !re.is_match(line).unwrap_or(false) {
             continue; // no placeholders to replace
         }
 
         // replace the placeholders in the line and change to owned COW
-        *line = re.replace_all(line, |caps: &regex::Captures| {
+        *line = re.replace_all(line, |caps: &fancy_regex::Captures| {
             let var_name = &caps[1];
             greq_response.get_var(var_name)
         }).into_owned().into();

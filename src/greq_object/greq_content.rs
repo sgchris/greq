@@ -191,7 +191,7 @@ impl GreqContent {
     }
 
     /// Validates if the provided HTTP method is one of the standard methods.
-    fn is_valid_http_method(method: &str) -> bool {
+    pub fn is_valid_http_method(method: &str) -> bool {
         let valid_methods = [
             "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"
         ];
@@ -200,7 +200,7 @@ impl GreqContent {
     }
 
     /// Validates if the provided HTTP version is in the correct format "HTTP/x.y"
-    fn is_valid_http_version(version: &str) -> bool {
+    pub fn is_valid_http_version(version: &str) -> bool {
         // Define the regex pattern for "HTTP/x.y" format
         let re = Regex::new(r"^HTTP/\d\.\d$").unwrap();
         re.is_match(version)
@@ -208,7 +208,7 @@ impl GreqContent {
 
     // parse a single header line and update the GreqContent object
     // if the header is "host", it also updates the hostname and port
-    fn parse_single_header_line(
+    pub fn parse_single_header_line(
         greq_content: &mut GreqContent,
         key: &str,
         value: &str,

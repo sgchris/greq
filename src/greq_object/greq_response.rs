@@ -12,8 +12,26 @@ pub struct GreqResponse {
 }
 
 impl GreqResponse {
+    /// gets the value of a variable from the response
+    /// the placeholder must start with "dependency." or "dep."
     pub fn get_var(&self, var: &str) -> String {
-        match var {
+        let mut the_var = var;
+        if the_var.is_empty() {
+            return String::new();
+        }
+
+        // check if the variable starts with "dependency." or "dep."
+        let dependency_prefix1 = "dependency.";
+        let dependency_prefix2 = "dep.";
+        if the_var.starts_with(dependency_prefix1) {
+            the_var = &var[dependency_prefix1.len()..];
+        } else if the_var.starts_with(dependency_prefix2) {
+            the_var = &var[dependency_prefix2.len()..];
+        } else {
+            return String::new(); // If it doesn't start with "dependency.", return empty
+        }
+
+        match the_var {
             "status_code" => self.status_code.to_string(),
             "reason_phrase" => self.reason_phrase.clone(),
             "evaluation_result" => if self.evaluation_result { 
