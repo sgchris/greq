@@ -324,8 +324,8 @@ impl Greq {
 
     /// Check if the request can send a body based on the HTTP method.
     #[inline]
-    fn request_can_send_body(&self) -> bool {
-        matches!(self.content.method.as_str(), "POST" | "PUT" | "PATCH")
+    pub fn request_can_send_body(&self) -> bool {
+        matches!(self.content.method.to_uppercase().as_str(), "POST" | "PUT" | "PATCH")
     }
 
     /// Check if a header should be removed for reqwest because it's handled

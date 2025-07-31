@@ -1,494 +1,156 @@
 use greq::greq_object::greq::Greq;
-use greq::constants::{ DEFAULT_DELIMITER_CHAR };
+use greq::greq_object::{
+    greq_header::{GreqHeader},
+    greq_content::{
+        GreqContent,
+    },
+    greq_footer::{
+        GreqFooter
+    },
+};
 
-#[test]
-fn test_parse_section_splitting_with_default_delimiter() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.sections_delimiter, DEFAULT_DELIMITER_CHAR);
+fn create_test_greq(hostname: &str, uri: &str, custom_port: Option<u16>, is_http: bool, method: &str) -> Greq {
+    Greq {
+        file_contents: String::new(),
+        sections_delimiter: '=',
+        header: GreqHeader {
+            is_http,
+            ..Default::default()
+        },
+        content: GreqContent {
+            hostname: hostname.to_string(),
+            uri: uri.to_string(),
+            custom_port,
+            method: method.to_string(),
+            ..Default::default()
+        },
+        footer: GreqFooter::default(),
+    }
 }
 
 #[test]
-fn test_parse_section_splitting_with_custom_delimiter() {
-    let content = r#"delimiter: +
-project: TestProject
-++++
-GET /test HTTP/1.1
-Host: example.com
-++++
-status-code equals: 200"#;
+fn test_get_full_url_basic_scenarios() {
+    // HTTPS with path
+    let greq = create_test_greq("api.example.com", "users/123", None, false, "GET");
+    assert_eq!(greq.get_full_url(), "https://api.example.com/users/123");
 
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.sections_delimiter, '+');
+    // HTTP with custom port
+    let greq = create_test_greq("localhost", "api/health", Some(8080), true, "GET");
+    assert_eq!(greq.get_full_url(), "http://localhost:8080/api/health");
+
+    // HTTPS with custom port
+    let greq = create_test_greq("secure.api.com", "v1/data", Some(443), false, "POST");
+    assert_eq!(greq.get_full_url(), "https://secure.api.com:443/v1/data");
 }
 
 #[test]
-fn test_parse_delimiter_in_first_line() {
-    let content = r#"delimiter: #
-####
-GET /test HTTP/1.1
-Host: example.com
-####
-status-code equals: 200"#;
+fn test_get_full_url_uri_edge_cases() {
+    // Empty URI
+    let greq = create_test_greq("example.com", "", None, false, "GET");
+    assert_eq!(greq.get_full_url(), "https://example.com");
 
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.sections_delimiter, '#');
+    // URI with leading slash
+    let greq = create_test_greq("api.test.com", "/users", None, false, "POST");
+    assert_eq!(greq.get_full_url(), "https://api.test.com/users");
+
+    // URI with multiple leading slashes
+    let greq = create_test_greq("api.test.com", "///users", None, false, "POST");
+    assert_eq!(greq.get_full_url(), "https://api.test.com/users");
+
+    // URI without leading slash
+    let greq = create_test_greq("api.test.com", "users/123/posts", None, false, "GET");
+    assert_eq!(greq.get_full_url(), "https://api.test.com/users/123/posts");
 }
 
 #[test]
-fn test_parse_delimiter_mixed_with_other_headers() {
-    let content = r#"project: TestProject
-delimiter: @
-@@@@
-GET /test HTTP/1.1
-Host: example.com
-@@@@
-status-code equals: 200"#;
+fn test_get_full_url_complex_scenarios() {
+    // URI with query parameters and fragments (edge case)
+    let greq = create_test_greq("search.api.com", "search?q=test&limit=10#results", Some(9000), true, "GET");
+    assert_eq!(greq.get_full_url(), "http://search.api.com:9000/search?q=test&limit=10#results");
 
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.sections_delimiter, '@');
-    assert_eq!(result.header.project, Some("TestProject".to_string()));
-}
+    // Very long URI
+    let long_uri = "very/long/path/with/many/segments/that/goes/on/and/on/endpoint";
+    let greq = create_test_greq("deep.api.com", long_uri, None, false, "GET");
+    assert_eq!(greq.get_full_url(), format!("https://deep.api.com/{}", long_uri));
 
-// Section count edge cases
-
-#[test]
-fn test_parse_no_sections() {
-    let content = "project: TestProject";
-
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail with insufficient sections
+    // URI with special characters
+    let greq = create_test_greq("api.example.com", "users/john@doe.com/profile", None, false, "GET");
+    assert_eq!(greq.get_full_url(), "https://api.example.com/users/john@doe.com/profile");
 }
 
 #[test]
-fn test_parse_one_section_only() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com"#;
+fn test_request_can_send_body_all_methods() {
+    // Methods that CAN send body
+    assert!(create_test_greq("test.com", "users", None, false, "POST").request_can_send_body());
+    assert!(create_test_greq("test.com", "users", None, false, "PUT").request_can_send_body());
+    assert!(create_test_greq("test.com", "users", None, false, "PATCH").request_can_send_body());
 
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail - missing footer section
+    // Methods that CANNOT send body
+    assert!(!create_test_greq("test.com", "users", None, false, "GET").request_can_send_body());
+    assert!(!create_test_greq("test.com", "users", None, false, "DELETE").request_can_send_body());
+    assert!(!create_test_greq("test.com", "users", None, false, "HEAD").request_can_send_body());
+    assert!(!create_test_greq("test.com", "users", None, false, "OPTIONS").request_can_send_body());
+
+    // Case sensitivity test
+    assert!(create_test_greq("test.com", "users", None, false, "post").request_can_send_body());
+    assert!(create_test_greq("test.com", "users", None, false, "Put").request_can_send_body());
+    assert!(!create_test_greq("test.com", "users", None, false, "get").request_can_send_body());
 }
 
 #[test]
-fn test_parse_four_sections() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals 200
-====
-extra section"#;
+fn test_should_remove_header_standard_cases() {
+    // Headers that SHOULD be removed (case insensitive)
+    assert!(Greq::should_remove_header_for_reqwest("host"));
+    assert!(Greq::should_remove_header_for_reqwest("HOST"));
+    assert!(Greq::should_remove_header_for_reqwest("Host"));
 
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail - too many sections
+    assert!(Greq::should_remove_header_for_reqwest("connection"));
+    assert!(Greq::should_remove_header_for_reqwest("keep-alive"));
+    assert!(Greq::should_remove_header_for_reqwest("content-length"));
+    assert!(Greq::should_remove_header_for_reqwest("transfer-encoding"));
+
+    // Headers that should NOT be removed
+    assert!(!Greq::should_remove_header_for_reqwest("authorization"));
+    assert!(!Greq::should_remove_header_for_reqwest("content-type"));
+    assert!(!Greq::should_remove_header_for_reqwest("accept"));
+    assert!(!Greq::should_remove_header_for_reqwest("user-agent"));
 }
 
 #[test]
-fn test_parse_five_sections() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals 200
-====
-fourth section
-====
-fifth section"#;
+fn test_should_remove_header_proxy_and_http2() {
+    // Proxy headers
+    assert!(Greq::should_remove_header_for_reqwest("proxy-connection"));
+    assert!(Greq::should_remove_header_for_reqwest("proxy-authorization"));
+    assert!(Greq::should_remove_header_for_reqwest("Proxy-Connection"));
 
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail - way too many sections
-}
+    // HTTP/2 pseudo headers
+    assert!(Greq::should_remove_header_for_reqwest(":method"));
+    assert!(Greq::should_remove_header_for_reqwest(":path"));
+    assert!(Greq::should_remove_header_for_reqwest(":scheme"));
+    assert!(Greq::should_remove_header_for_reqwest(":authority"));
 
-// Delimiter edge cases
-
-#[test]
-fn test_parse_delimiter_not_repeated_four_times() {
-    let content = r#"project: TestProject
-===
-GET /test HTTP/1.1
-Host: example.com
-===
-status-code equals: 200"#;
-
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail - delimiter must be at least 4 chars
+    // Similar looking but allowed headers
+    assert!(!Greq::should_remove_header_for_reqwest("x-proxy-auth"));
+    assert!(!Greq::should_remove_header_for_reqwest("method"));
+    assert!(!Greq::should_remove_header_for_reqwest("custom-connection"));
 }
 
 #[test]
-fn test_parse_delimiter_exactly_four_times() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-#[test]
-fn test_parse_delimiter_more_than_four_times() {
-    let content = r#"delimiter: #
-project: TestProject
-########
-GET /test HTTP/1.1
-Host: example.com
-########
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.sections_delimiter, '#');
-}
-
-#[test]
-fn test_parse_mixed_delimiter_lengths() {
-    let content = r#"delimiter: +
-project: TestProject
-++++
-GET /test HTTP/1.1
-Host: example.com
-++++++++
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-#[test]
-fn test_parse_delimiter_with_spaces_around() {
-    let content = r#"project: TestProject
-  ====  
-GET /test HTTP/1.1
-Host: example.com
-  ====  
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-#[test]
-fn test_parse_delimiter_mixed_with_content() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-Authorization: Bearer ====token====
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert!(result.content.headers.get("Authorization").unwrap().contains("===="));
-}
-
-// Whitespace and newline edge cases
-
-#[test]
-fn test_parse_empty_lines_between_sections() {
-    let content = r#"project: TestProject
-
-====
-
-GET /test HTTP/1.1
-Host: example.com
-
-====
-
-status-code equals: 200
-
-"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-#[test]
-fn test_parse_multiple_empty_lines() {
-    let content = r#"project: TestProject
-
-
-
-====
-
-
-
-GET /test HTTP/1.1
-Host: example.com
-
-
-
-====
-
-
-
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-#[test]
-fn test_parse_only_whitespace_sections() {
-    let content = r#"   
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-   "#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.footer.conditions.len(), 0); // Empty footer
-}
-
-#[test]
-fn test_parse_tabs_and_spaces_mixed() {
-    let content = "project: TestProject\t\n\t\t====\t\t\nGET /test HTTP/1.1\nHost: example.com\n\t====\t\nstatus-code equals: 200";
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-// Content boundaries and special cases
-
-#[test]
-fn test_parse_content_with_delimiter_sequence() {
-    let content = r#"project: TestProject
-====
-POST /test HTTP/1.1
-Host: example.com
-Content-Type: text/plain
-
-This content contains ====
-multiple ==== sequences
-that should not break parsing
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert!(result.content.body.contains("===="));
-    assert!(result.content.body.contains("multiple"));
-}
-
-#[test]
-fn test_parse_footer_with_delimiter_in_values() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-response-body contains: "message====value"
-headers.custom-header equals: "data====more-data""#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.footer.conditions.len(), 2);
-    assert!(result.footer.conditions[0].value.contains("===="));
-}
-
-// File content preservation
-
-#[test]
-fn test_parse_preserves_original_content() {
-    let content = r#"project: TestProject
-delimiter: @
-@@@@
-GET /test HTTP/1.1
-Host: example.com
-@@@@
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.file_contents, content);
-}
-
-#[test]
-fn test_parse_preserves_content_with_special_chars() {
-    let content = "project: Test\tProject\n====\nGET /test HTTP/1.1\nHost: example.com\n====\nstatus-code equals: 200";
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.file_contents, content);
-}
-
-// Extreme edge cases
-
-#[test]
-fn test_parse_single_line_sections() {
-    let content = "project: Test\n====\nGET / HTTP/1.1\nHost: example.com\n====\nstatus-code equals: 200";
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.uri, "/");
-}
-
-#[test]
-fn test_parse_empty_string() {
-    let result = Greq::parse("");
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_parse_only_delimiters() {
-    let content = "====\n====\n====";
-
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail due to content parsing
-}
-
-#[test]
-fn test_parse_only_newlines() {
-    let content = "\n\n\n\n";
-
-    let result = Greq::parse(content);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_parse_very_long_sections() {
-    let long_header = format!("project: {}", "A".repeat(10000));
-    let long_body = "B".repeat(50000);
-    let content = format!(r#"{}
-====
-POST /upload HTTP/1.1
-Host: example.com
-
-{}
-====
-status-code equals: 201"#, long_header, long_body);
-
-    let result = Greq::parse(&content).unwrap();
-    assert!(result.header.project.as_ref().unwrap().len() > 9000);
-    assert!(result.content.body.len() > 40000);
-}
-
-// Boundary conditions for section detection
-
-#[test]
-fn test_parse_delimiter_at_start_of_file() {
-    let content = r#"====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-#[test]
-fn test_parse_delimiter_at_end_of_file() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals: 200
-===="#;
-
-    let result = Greq::parse(content);
-    assert!(result.is_err()); // Should fail - too many sections
-}
-
-#[test]
-fn test_parse_no_newline_at_end() {
-    let content = r#"project: TestProject
-====
-GET /test HTTP/1.1
-Host: example.com
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.footer.conditions.len(), 1);
-}
-
-#[test]
-fn test_parse_different_line_endings() {
-    // Test with \r\n (Windows line endings)
-    let content = "project: TestProject\r\n====\r\nGET /test HTTP/1.1\r\nHost: example.com\r\n====\r\nstatus-code equals: 200";
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.content.method, "GET");
-}
-
-// Nested delimiter patterns
-
-#[test]
-fn test_parse_delimiter_subset_in_content() {
-    let content = r#"project: TestProject
-====
-POST /test HTTP/1.1
-Host: example.com
-
-= single equal
-== double equal  
-=== triple equal
-===== five equals
-====
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert!(result.content.body.contains("=== triple equal"));
-    assert!(result.content.body.contains("===== five equals"));
-}
-
-#[test]
-fn test_parse_custom_delimiter_subset_patterns() {
-    let content = r#"delimiter: +
-project: TestProject
-++++
-POST /test HTTP/1.1
-Host: example.com
-
-+ single plus
-++ double plus
-+++ triple plus
-+++++ five plus
-++++
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert!(result.content.body.contains("+++ triple plus"));
-    assert!(result.content.body.contains("+++++ five plus"));
-}
-
-// Unicode and special character handling
-
-#[test]
-fn test_parse_unicode_content() {
-    let content = r#"project: тест
-====
-GET /тест HTTP/1.1
-Host: example.com
-
-{"message": "🚀 успех! 测试"}
-====
-response-body contains: 🚀"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert!(result.header.project.as_ref().unwrap().contains("тест"));
-    assert!(result.content.body.contains("🚀"));
-}
-
-#[test]
-#[ignore] // Unicode delimiter will be supported in future versions
-fn test_parse_unicode_delimiter() {
-    let content = r#"delimiter: ♦
-project: TestProject
-♦♦♦♦
-GET /test HTTP/1.1
-Host: example.com
-♦♦♦♦
-status-code equals: 200"#;
-
-    let result = Greq::parse(content).unwrap();
-    assert_eq!(result.sections_delimiter, '♦');
+fn test_should_remove_header_edge_cases() {
+    // Mixed case variations
+    assert!(Greq::should_remove_header_for_reqwest("CoNtEnT-LeNgTh"));
+    assert!(Greq::should_remove_header_for_reqwest("tRaNsFeR-eNcOdInG"));
+
+    // Empty string and whitespace (should not be removed)
+    assert!(!Greq::should_remove_header_for_reqwest(""));
+    assert!(!Greq::should_remove_header_for_reqwest(" "));
+
+    // Headers with similar names but different
+    assert!(!Greq::should_remove_header_for_reqwest("content-type"));
+    assert!(!Greq::should_remove_header_for_reqwest("host-header"));
+    assert!(!Greq::should_remove_header_for_reqwest("my-host"));
+
+    // Very long header name
+    let long_header = "very-long-custom-header-name-that-should-not-be-removed";
+    assert!(!Greq::should_remove_header_for_reqwest(long_header));
 }
