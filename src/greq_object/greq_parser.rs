@@ -129,34 +129,62 @@ pub fn resolve_and_check_file_exists(
     file_path: &str, // absolute or relative path to the file
     base_path: Option<&str>, // The base path when relative paths are provided
 ) -> io::Result<String> {
-    let candidate_path = if Path::new(file_path).is_absolute() { // Use Path::new for check
+    let candidate_path = if Path::new(file_path).is_absolute() {
         // If the provided path is already absolute, use it directly
-        PathBuf::from(file_path) // Convert &str to PathBuf
+        PathBuf::from(file_path)
     } else {
         // If the provided path is relative, resolve it against the base_path
         // or the current working directory if base_path is None.
         let actual_base = match base_path {
-            Some(path_str) => PathBuf::from(path_str), // Convert &str to PathBuf
-            None => env::current_dir()?, // Get current working directory, propagate error if any
+            Some(path_str) => {
+                let base_pathbuf = PathBuf::from(path_str);
+                // If base_path is a file, use its parent directory
+                // If base_path is a directory, use it directly
+                if base_pathbuf.is_file() {
+                    base_pathbuf.parent()
+                        .ok_or_else(|| io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            format!("Base path has no parent directory: {}", path_str)
+                        ))?
+                        .to_path_buf()
+                } else if base_pathbuf.is_dir() {
+                    base_pathbuf
+                } else {
+                    // base_path doesn't exist, treat it as a potential file and use its parent
+                    base_pathbuf.parent()
+                        .ok_or_else(|| io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            format!("Base path has no parent directory: {}", path_str)
+                        ))?
+                        .to_path_buf()
+                }
+            }
+            None => env::current_dir()?, // Get current working directory
         };
-        actual_base.join(file_path) // Join PathBuf with &str
+        actual_base.join(file_path)
     };
 
-    // Check if the candidate path exists
+    // Check if the candidate path exists and is a file
     if candidate_path.exists() {
-        // If it exists, return its canonicalized absolute path as a String.
-        // canonicalize() resolves all symlinks, `.` and `..` components.
-        candidate_path.canonicalize()? // This returns Result<PathBuf, io::Error>
-            .to_str() // Convert Path to &str (Option<&str>)
-            .map(|s| s.to_owned()) // Convert &str to String (Option<String>)
-            .ok_or_else(|| { // If None (path is not valid UTF-8), return an error
+        if !candidate_path.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Path exists but is not a file: {}", candidate_path.display()),
+            ));
+        }
+        
+        // If it exists and is a file, return its canonicalized absolute path as a String
+        candidate_path.canonicalize()?
+            .to_str()
+            .map(|s| s.to_owned())
+            .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("Resolved path contains invalid Unicode: {}", candidate_path.display()),
                 )
             })
     } else {
-        // If the file does not exist at the candidate path, return a NotFound error.
+        // If the file does not exist at the candidate path, return a NotFound error
         Err(io::Error::new(
             io::ErrorKind::NotFound,
             format!("File not found: {}", candidate_path.display()),

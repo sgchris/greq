@@ -13,6 +13,7 @@ fn test_get_var_basic_fields() {
         headers,
         body: Some("response body".to_string()),
         response_milliseconds: 150,
+        evaluation_result: false,
     };
 
     assert_eq!(response.get_var("status_code"), "200");
@@ -38,6 +39,7 @@ fn test_get_var_header_access() {
         headers,
         body: None,
         response_milliseconds: 75,
+        evaluation_result: false,
     };
 
     // Test existing headers
@@ -59,6 +61,7 @@ fn test_get_var_unknown_variables() {
         headers: HashMap::new(),
         body: Some("error message".to_string()),
         response_milliseconds: 1000,
+        evaluation_result: false,
     };
 
     // Test unknown variable names

@@ -183,7 +183,7 @@ fn test_enrich_with_comprehensive() {
     // New headers should be added, existing headers preserved
     assert_eq!(existing_content.headers.get("User-Agent").unwrap(), "MyApp");
     assert_eq!(existing_content.headers.get("Content-Type").unwrap(), "application/json");
-    assert_eq!(existing_content.headers.len(), 3);
+    assert_eq!(existing_content.headers.len(), 4);
 
     // Test 3: Partial enrichment
     let mut partial_content = GreqContent {

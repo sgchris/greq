@@ -2,6 +2,7 @@ use greq::greq_object::greq_footer::{GreqFooter, GreqFooterError};
 use greq::greq_object::greq_footer_condition::{ConditionOperator, GreqFooterCondition};
 use greq::greq_object::greq_evaluator::GreqEvaluator;
 use greq::greq_object::greq_response::GreqResponse;
+use greq::greq_object::traits::enrich_with_trait::EnrichWith;
 use std::collections::HashMap;
 
 // ============= GreqFooter Tests =============
@@ -190,7 +191,7 @@ fn test_greq_evaluator_all_operators() {
         let result = GreqEvaluator::evaluate(&response, &condition);
         assert_eq!(result, expected, 
             "Failed for key: {}, value: {}, operator: {:?}, case_sensitive: {}, has_not: {}", 
-            key, value, operator, case_sensitive, has_not
+            key, value, condition.operator, case_sensitive, has_not
         );
     }
 }

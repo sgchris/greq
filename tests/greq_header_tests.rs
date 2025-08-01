@@ -145,6 +145,9 @@ fn test_full_parse_with_file_operations() {
     ];
     
     let result = GreqHeader::parse(&lines, current_file.to_str().unwrap(), None, None);
+    if result.is_err() {
+        panic!("Failed to parse GreqHeader: {:?}", result.err());
+    }
     assert!(result.is_ok());
     let header = result.unwrap();
     

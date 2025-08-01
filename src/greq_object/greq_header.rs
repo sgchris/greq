@@ -84,7 +84,6 @@ impl GreqHeader {
         greq_header.absolute_path = greq_file_path.to_string();
 
         // enrich with base_request 
-        // or check if base request property provided and check if it exists
         if let Some(base_request_header_obj) = base_request {
             GreqHeader::enrich_with_base_request_or_check_if_provided(&mut greq_header, &base_request_header_obj)?;
 
@@ -92,6 +91,11 @@ impl GreqHeader {
             if let Some(dependency_response_obj) = dependency_response {
                 replace_placeholders_in_lines(&mut cow_header_lines, dependency_response_obj);
             }
+        }
+
+        // check if base request property provided and check if it exists
+        if greq_header.extends.is_some() {
+            GreqHeader::check_and_update_extends(&mut greq_header)?;
         }
 
         // After the header was enriched with the base request,
@@ -175,28 +179,26 @@ impl GreqHeader {
         greq_header.enrich_with(base_request)
             .map_err(|e| GreqHeaderError::GeneralError { error: e })?;
 
-        if greq_header.extends.is_some() {
-            // resolve the base_request file path
-            let mut base_request_name = Cow::from(greq_header.extends.as_ref().unwrap());
-            if !base_request_name.ends_with(".greq") {
-                // if the base_request_name does not end with .greq, add it
-                base_request_name.to_mut().push_str(".greq");
-            }
+        Ok(())
+    }
 
-            // get the absolute path of the base request file
-            let absolute_base_path = resolve_and_check_file_exists(&base_request_name, Some(greq_header.absolute_path.as_ref()))
-                .map_err(|_| GreqHeaderError::FileDoesNotExist { path: base_request_name.to_string() })?;
+    /// Check if the depends_on property is set, and if so, check if the file exists and update the
+    /// value to the absolute path.
+    pub fn check_and_update_extends(greq_header: &mut GreqHeader) -> Result<(), GreqHeaderError> {
+        // if the extends property is set, check if the file exists
+        let absolute_extends_path = resolve_and_check_file_exists(
+            greq_header.extends.as_ref().unwrap(),
+            Some(&greq_header.absolute_path),
+        ).map_err(|_| GreqHeaderError::FileDoesNotExist { path: greq_header.extends.as_ref().unwrap().to_string() })?;
 
-            // update the base_request field with the absolute path
-            greq_header.extends = Some(absolute_base_path);
-        }
+        greq_header.extends = Some(absolute_extends_path);
 
         Ok(())
     }
 
     /// Check if the depends_on property is set, and if so, check if the file exists and update the
     /// value to the absolute path.
-    fn check_and_update_depends_on(greq_header: &mut GreqHeader) -> Result<(), GreqHeaderError> {
+    pub fn check_and_update_depends_on(greq_header: &mut GreqHeader) -> Result<(), GreqHeaderError> {
         // if the depends_on property is set, check if the file exists
         let absolute_depends_on_path = resolve_and_check_file_exists(
             greq_header.depends_on.as_ref().unwrap(),
@@ -207,9 +209,6 @@ impl GreqHeader {
 
         Ok(())
     }
-
-
-
 }
 
 impl EnrichWith for GreqHeader {

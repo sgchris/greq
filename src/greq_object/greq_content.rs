@@ -255,6 +255,8 @@ impl GreqContent {
 }
 
 impl EnrichWith for GreqContent {
+    /// the request line must be the first line of the content, so it's not included in the
+    /// enrichment
     fn enrich_with(&mut self, object_to_merge: &Self) -> Result<(), String>
 where
         Self: Sized,
