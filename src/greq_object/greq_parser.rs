@@ -129,6 +129,14 @@ pub fn resolve_and_check_file_exists(
     file_path: &str, // absolute or relative path to the file
     base_path: Option<&str>, // The base path when relative paths are provided
 ) -> io::Result<String> {
+    // ensure the file path ends with ".greq"
+    let file_path_with_ext = if !file_path.ends_with(".greq") {
+        format!("{}.greq", file_path)
+    } else {
+        file_path.to_string()
+    };
+    let file_path = &file_path_with_ext;
+
     let candidate_path = if Path::new(file_path).is_absolute() {
         // If the provided path is already absolute, use it directly
         PathBuf::from(file_path)

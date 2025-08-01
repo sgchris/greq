@@ -211,7 +211,7 @@ fn test_replace_placeholders_multiple_same_line() {
 fn test_resolve_file_absolute_path() {
     // Test with absolute path (create a temp file for testing)
     let temp_dir = std::env::temp_dir();
-    let test_file = temp_dir.join("greq_test_file.txt");
+    let test_file = temp_dir.join("greq_test_file.greq");
     fs::write(&test_file, "test content").unwrap();
     
     let absolute_path = test_file.to_str().unwrap();
@@ -228,7 +228,7 @@ fn test_resolve_file_absolute_path() {
 fn test_resolve_file_relative_path_current_dir() {
     // Test with relative path using current directory
     // Create a temp file in current directory
-    let test_file = "greq_test_relative.txt";
+    let test_file = "greq_test_relative.txt.greq";
     fs::write(test_file, "test content").unwrap();
     
     let result = resolve_and_check_file_exists(test_file, None).unwrap();
@@ -244,7 +244,7 @@ fn test_resolve_file_relative_path_current_dir() {
 fn test_resolve_file_relative_path_with_base() {
     // Test with relative path using provided base path
     let temp_dir = std::env::temp_dir();
-    let test_file = temp_dir.join("greq_test_base.txt");
+    let test_file = temp_dir.join("greq_test_base.txt.greq");
     fs::write(&test_file, "test content").unwrap();
     
     let base_path = temp_dir.to_str().unwrap();

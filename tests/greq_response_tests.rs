@@ -16,13 +16,13 @@ fn test_get_var_basic_fields() {
         evaluation_result: false,
     };
 
-    assert_eq!(response.get_var("status_code"), "200");
-    assert_eq!(response.get_var("reason_phrase"), "OK");
-    assert_eq!(response.get_var("body"), "response body");
-    assert_eq!(response.get_var("response_milliseconds"), "150");
+    assert_eq!(response.get_var("dep.status_code"), "200");
+    assert_eq!(response.get_var("dep.reason_phrase"), "OK");
+    assert_eq!(response.get_var("dep.body"), "response body");
+    assert_eq!(response.get_var("dep.response_milliseconds"), "150");
 
     // Test headers serialization
-    let headers_json = response.get_var("headers");
+    let headers_json = response.get_var("dep.headers");
     assert!(headers_json.contains("content-type"));
     assert!(headers_json.contains("application/json"));
 }
@@ -43,14 +43,14 @@ fn test_get_var_header_access() {
     };
 
     // Test existing headers
-    assert_eq!(response.get_var("header.content-type"), "application/json");
-    assert_eq!(response.get_var("header.x-custom-header"), "custom-value");
+    assert_eq!(response.get_var("dep.header.content-type"), "application/json");
+    assert_eq!(response.get_var("dep.header.x-custom-header"), "custom-value");
 
     // Test non-existent header
-    assert_eq!(response.get_var("header.non-existent"), "");
+    assert_eq!(response.get_var("dep.header.non-existent"), "");
 
     // Test body when None
-    assert_eq!(response.get_var("body"), "");
+    assert_eq!(response.get_var("dep.body"), "");
 }
 
 #[test]
@@ -67,8 +67,8 @@ fn test_get_var_unknown_variables() {
     // Test unknown variable names
     assert_eq!(response.get_var("unknown_field"), "");
     assert_eq!(response.get_var(""), "");
-    assert_eq!(response.get_var("header."), "");
-    assert_eq!(response.get_var("status"), "");
-    assert_eq!(response.get_var("body_length"), "");
+    assert_eq!(response.get_var("dep.header."), "");
+    assert_eq!(response.get_var("dep.status"), "");
+    assert_eq!(response.get_var("dep.body_length"), "");
 }
 

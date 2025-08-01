@@ -136,6 +136,7 @@ fn test_full_parse_with_file_operations() {
 
     let mut current_file = tmp_dir.clone();
     current_file.push("current.greq");
+    File::create(&current_file).unwrap();
 
     // Test 1: Successful parse with file validation
     let lines = vec![
@@ -175,6 +176,7 @@ fn test_full_parse_with_file_operations() {
     assert_eq!(result.unwrap().project, Some("SecondProject".to_string()));
 
     // Clean up
+    std::fs::remove_file(&current_file).unwrap();
     std::fs::remove_file(&base_file).unwrap();
     std::fs::remove_file(&depends_file).unwrap();
     std::fs::remove_dir(&tmp_dir).unwrap();
