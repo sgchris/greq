@@ -2,10 +2,16 @@
 -- in this example I'm using the basic test (file 01_basic_test)
 project: test-project
 is-http: true
-base-request: test/01_basic_test.greq
+extends: 02_headers_test
 ====
-DELETE /api/simple-test
+POST /api/users/123
+
+John Snow
 ====
 
 -- Test conditions
-response-body equals: some body
+headers.X-Greq-Custom contains: headers
+headers.X-Greq-Custom contains case-sensitive: Test
+
+not response-body starts-with case-sensitive: Doe
+
