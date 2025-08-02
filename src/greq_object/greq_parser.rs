@@ -23,24 +23,19 @@ pub fn get_header_section_lines(content: &str) -> Result<Vec<&str>, GreqError> {
     let mut header_lines: Vec<&str> = Vec::new();
 
     for line in lines.iter() {
-        println!("Parsing line: {}", line); // Debugging line
-
         // skip comment lines that start with "--"
         // TODO: enable custom delimiter that is non alphanumeric char not a comment
         if line.starts_with(COMMENT_PREFIX) {
-            println!("Skipping comment line: {}", line); // Debugging line
             continue; // skip comment lines
         }
 
         // check if the first char is not a letter or digit, which indicates a delimiter
         let first_char = line.chars().next().unwrap();
         if !first_char.is_alphanumeric() && is_line_only_from_char(line, first_char) {
-            println!("Found delimiter line: {}", line); // Debugging line
             break; // stop parsing if the line is a delimiter
         }
 
         header_lines.push(line);
-        println!("Added header line: {}", line); // Debugging line
     }
 
     Ok(header_lines)
