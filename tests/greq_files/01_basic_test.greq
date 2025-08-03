@@ -3,14 +3,14 @@
 -- Expected: Status code 200 and response contains "healthy"
 -- 
 -- This example uses echo server named Grecho (https://github.com/sgchris/grecho) 
--- that runs on 'localhost:3000'
+-- that runs on '127.0.0.1:8001'
 
 project: test-project
 is-http: true
 ====
 
 POST /api/simple-test
-Host: localhost:3000
+Host: 127.0.0.1:8001
 Accept: application/json
 
 some body

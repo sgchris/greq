@@ -6,7 +6,7 @@ is-http: true
 ====
 
 PUT /api/settings
-Host: localhost:3000
+Host: 127.0.0.1:8001
 Content-Type: application/json
 Accept: application/json
 internal.status-code: 202

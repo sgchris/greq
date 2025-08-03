@@ -6,7 +6,7 @@ is-http: true
 ====
 
 POST /api/users
-Host: localhost:3000
+Host: 127.0.0.1:8001
 Content-Type: application/json
 Accept: application/json
 X-Greq-Custom: Test headers

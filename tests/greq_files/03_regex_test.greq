@@ -5,7 +5,7 @@ project: test-project
 is-http: true
 ====
 GET /api/search?q=test
-Host: localhost:3000
+Host: 127.0.0.1:8001
 Accept: application/json
 internal.response-body: f47ac10b-58cc-4372-a567-0e02b2c3d479
 ====
