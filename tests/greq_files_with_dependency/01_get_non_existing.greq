@@ -1,0 +1,14 @@
+-- using: GResources - online resources manager API
+--
+-- get a non existing resource
+project: greq deps
+is-http: true
+
+
+==============
+GET /myproj/index.php
+--host: 127.0.0.1:8002
+
+==============
+status-code: 404
+

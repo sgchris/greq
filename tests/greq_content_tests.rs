@@ -44,12 +44,6 @@ fn test_parse_complete_success_scenarios() {
     assert_eq!(result.http_version, "HTTP/1.1");
     assert_eq!(result.uri, "/");
     assert_eq!(result.custom_port, Some(65535));
-
-    // Test 4: Empty content should return default
-    let empty_lines = vec![];
-    let result = GreqContent::parse(&empty_lines, None, None).unwrap();
-    assert_eq!(result.method, "");
-    assert_eq!(result.hostname, "");
 }
 
 #[test]
@@ -91,6 +85,11 @@ fn test_parse_all_error_scenarios() {
 
     // Test empty hostname
     let content_lines = vec!["GET /test HTTP/1.1", "Host: "];
+    let result = GreqContent::parse(&content_lines, None, None);
+    assert!(matches!(result, Err(GreqContentError::MissingHost)));
+
+    // Test 2: Complete request with port, headers, and body
+    let content_lines = vec!["POST /api/users HTTP/1.1", ""];
     let result = GreqContent::parse(&content_lines, None, None);
     assert!(matches!(result, Err(GreqContentError::MissingHost)));
 }

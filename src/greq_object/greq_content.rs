@@ -76,6 +76,12 @@ impl GreqContent {
             if let Some(dependency_response_obj) = dependency_response {
                 replace_placeholders_in_lines(&mut cow_lines, dependency_response_obj);
             }
+        } else {
+            // make sure all the rqeuired fields are set
+            // check the host
+            if greq_content.hostname.is_empty() {
+                return Err(GreqContentError::MissingHost);
+            }
         }
 
         Ok(greq_content)

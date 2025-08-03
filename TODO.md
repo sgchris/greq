@@ -41,4 +41,6 @@ add many tests for this case.
 
 18. Add optional retries
 
-19
+19. fix when content part has no "host"
+
+20. fix error messages
