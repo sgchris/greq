@@ -66,6 +66,7 @@ impl Greq {
             if !parse_only {
                 if let Some(dependency_greq_file) = greq_basic_header.depends_on {
                     // execute the dependency Greq file, Greq object is not relevant
+                    println!("Executing dependency Greq file: {}", dependency_greq_file);
                     let (_dependency_execution_result_option, _) = Box::pin(Greq::process(
                         &dependency_greq_file,
                         Some(false) // execute normally
@@ -75,12 +76,15 @@ impl Greq {
                                 reason: e.to_string() 
                             }
                         })?;
+
+                    println!("Dependency Greq file executed successfully");
                     dependency_execution_result_option = _dependency_execution_result_option;
                 }
             }
 
             if let Some(base_request) = greq_basic_header.extends {
                 // The first one is the response, which is not relevant here
+                println!("Loading base Greq file: {}", base_request);
                 let (_, base_greq) = Box::pin(Greq::process(
                     &base_request,
                     Some(true) // parse the base request only
@@ -140,7 +144,11 @@ impl Greq {
 
         if !parse_only {
             // if parse_only is false, execute the request and return the response
-            let response = greq.boxed_execute().await?;
+            let response = greq.boxed_execute()
+            .await.map_err(|e| {
+                GreqError::HttpError { message: e.to_string() }
+            })?;
+
             return Ok((Some(response), greq));
         }
 
@@ -152,19 +160,18 @@ impl Greq {
         &self,
     ) -> Result<GreqResponse, GreqError> {
         let greq_response: GreqResponse = self.get_response().await.map_err(|e| {
-            GreqError::HttpError { message: e }
+            GreqError::HttpError { message: format!("Error sending the request. {}", e) }
         })?;
 
         // Log the response with the required log level
-        let response_as_json = serde_json::to_string_pretty(&greq_response)
-            .unwrap_or_else(|_| String::from("{}"));
-        println!("Response:\r\n{}", response_as_json);
+        // TODO: add a flag to print the response
+        // let response_as_json = serde_json::to_string_pretty(&greq_response).unwrap_or_else(|_| String::from("{}"));
+        // println!("Response:\r\n{}", response_as_json);
 
         let evaluation_result_object = self.evaluate(&greq_response);
         if let Err(evaluation_error) = evaluation_result_object {
-            CliTools::print_red("failed");
-            println!();
             CliTools::print_red(&evaluation_error.to_string());
+            println!();
 
             return Err(evaluation_error);
         } else {
@@ -175,7 +182,7 @@ impl Greq {
     }
 
     /// send an HTTP request using Reqwest and return the response.
-    pub async fn get_response(&self) -> Result<GreqResponse, String> {
+    async fn get_response(&self) -> Result<GreqResponse, String> {
         // Create a reqwest client
         let client = Client::new();
 
@@ -247,6 +254,10 @@ impl Greq {
         let mut current_or_group: Vec<bool> = Vec::new();
         let mut current_or_group_failures: Vec<String> = Vec::new();
         let mut current_or_result;
+
+        if !self.footer.conditions.is_empty() {
+            println!("Evaluating conditions...");
+        }
 
         // loop through the conditions in the footer and evaluate one-by-one
         for condition in &self.footer.conditions {

@@ -44,3 +44,7 @@ add many tests for this case.
 19. fix when content part has no "host"
 
 20. fix error messages
+
+21. add conditional dependency
+
+22. add the option to export variables (for dependant requests)

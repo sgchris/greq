@@ -1,0 +1,166 @@
+-- ==============================================================================
+-- GREQ All Features Demo File
+-- ==============================================================================
+-- This file demonstrates all available GREQ features with commented examples
+-- Use this as a reference for understanding GREQ capabilities
+-- 
+-- GREQ Structure:
+-- 1. HEADER SECTION - Configuration and metadata
+-- 2. CONTENT SECTION - HTTP request definition
+-- 3. FOOTER SECTION - Response validation conditions
+-- ==============================================================================
+
+-- ==============================================================================
+-- HEADER SECTION - Available properties:
+-- ==============================================================================
+
+-- Project name for organization and reporting
+project: all-features-demo
+
+-- Custom delimiter character (default is '=')
+-- Minimum 4 characters required to separate sections
+-- delimiter: $
+
+-- Use HTTP instead of HTTPS (default is HTTPS)
+is-http: true
+
+-- Extend another GREQ file as a base template
+-- This file will inherit all properties from the base file
+-- Current file properties will override the base file properties
+-- extends: base-template.greq
+
+-- Execute another GREQ file as a dependency before this one
+-- The dependency must pass all validations for this file to execute
+-- Response data from dependency can be used as placeholders in this file
+-- depends-on: dependency-file.greq
+
+====
+
+-- ==============================================================================
+-- CONTENT SECTION - HTTP Request definition:
+-- ==============================================================================
+
+-- HTTP Method and Request Line
+-- Supported methods: GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, TRACE, CONNECT
+-- Format: METHOD /path/to/resource HTTP/version (HTTP version is optional, defaults to HTTP/1.1)
+POST /api/users HTTP/1.1
+
+-- Required: Host header specifies the target server
+-- Format: hostname:port (port is optional for standard ports)
+Host: api.example.com:8080
+
+-- Standard HTTP headers
+Content-Type: application/json
+Accept: application/json
+-- take the token from the dependency request
+Authorization: Bearer $(dep.headers.bearer_token)
+User-Agent: GREQ-Client/1.0
+
+-- Custom headers for testing
+X-API-Version: v1
+X-Request-ID: test-12345
+X-Custom-Header: custom-value
+
+-- Request body (after empty line)
+-- Only supported for POST, PUT, PATCH methods
+{
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "age": 30,
+    "active": true
+}
+
+====
+
+-- ==============================================================================
+-- FOOTER SECTION - Response validation conditions:
+-- ==============================================================================
+
+-- Basic status code validation
+status-code equals: 201
+
+-- Response body validation with different operators
+response-body contains: "John Doe"
+response-body starts-with: "{"
+response-body ends-with: "}"
+response-body matches-regex: \{"id":\s*\d+.*\}
+
+-- Header validation using headers. prefix
+headers.Content-Type equals: application/json
+headers.X-Response-Header contains: expected
+headers.Location starts-with: /api/users/
+
+-- Case-sensitive validation (default is case-insensitive)
+response-body contains case-sensitive: "John Doe"
+headers.Content-Type equals case-sensitive: application/json
+
+-- Negation with 'not' keyword
+not status-code equals: 400
+not status-code equals: 500
+not response-body contains: error
+not response-body contains: exception
+not headers.Content-Type contains: text/html
+
+-- Numerical comparisons
+-- status-code greater-than: 200
+-- status-code less-than: 300
+-- headers.Content-Length greater-than: 0
+
+-- OR conditions for alternative validations
+-- First condition in OR group doesn't need 'or' prefix
+status-code equals: 200
+or status-code equals: 201
+or status-code equals: 202
+
+-- Complex OR groups with different operators
+response-body contains: success
+or response-body contains: created
+or response-body contains: updated
+
+-- Combining NOT with OR conditions
+not response-body contains: error
+or not response-body contains: failed
+or not response-body contains: exception
+
+-- All available operators summary:
+-- equals        - Exact string match
+-- contains      - Substring match
+-- starts-with   - Prefix match
+-- ends-with     - Suffix match
+-- matches-regex - Regular expression match
+-- greater-than  - Numerical comparison (for numbers only)
+-- less-than     - Numerical comparison (for numbers only)
+
+-- Available validation targets:
+-- status-code        - HTTP response status code
+-- response-body      - HTTP response body content
+-- headers.{name}     - Specific HTTP response header
+
+-- Available modifiers:
+-- not               - Negates the condition
+-- or                - Creates alternative conditions (OR logic)
+-- case-sensitive    - Makes string comparison case-sensitive
+
+-- Commented conditions (for documentation or temporary disabling)
+-- status-code equals: 500  -- This condition is disabled
+-- response-body contains: debug  -- Temporary check
+
+-- ==============================================================================
+-- Placeholder Support (when using depends-on):
+-- ==============================================================================
+-- When using depends-on, you can reference response data from the dependency:
+-- 
+-- In request headers:
+-- Authorization: Bearer {{response.headers.token}}
+-- X-User-ID: {{response.body.user_id}}
+-- 
+-- In request body:
+-- {
+--     "user_id": "$(response.body.id)",
+--     "reference": "$(response.body.reference_number)"
+-- }
+-- 
+-- In footer conditions:
+-- response-body contains: $(dependency.body.expected_value)
+-- headers.X-Session contains: $(dependency.headers.session_id)
+-- ==============================================================================

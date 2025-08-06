@@ -39,10 +39,11 @@ async fn main() -> std::io::Result<()> {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, validation_error));
     }
 
+    // TODO: process the files in parallel
     for input_file in &args.input_files {
-        if let Err(e) = process_input_file(input_file).await {
-            println!("Error processing file '{}': {}", input_file, e);
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+        if let Err(_) = process_input_file(input_file).await {
+            println!("Error processing file '{}'", input_file);
+            std::process::exit(1);
         }
     }
 
@@ -53,10 +54,11 @@ async fn main() -> std::io::Result<()> {
 #[inline]
 pub async fn process_input_file(input_file: &str) -> Result<Greq, String> {
     // parse the input file and initialize the Greq object
-    // TODO: Move that part to another async method to handle multiple files simultaneously
-    let (greq_response, greq) = Greq::process(&input_file, None).await.map_err(|e| {
-        format!("Failed to process input file '{}': {}", input_file, e)
-    })?;
+    let (greq_response, greq) = Greq::process(&input_file, None)
+        .await
+        .map_err(|_| {
+            format!("Failed to process input file '{}'", input_file)
+        })?;
 
     println!("Processed file: {}", input_file);
     if let Some(unwrapped_response) = greq_response {

@@ -40,6 +40,7 @@ impl GreqResponse {
                 "false".to_string() 
             },
             "headers" => serde_json::to_string(&self.headers).unwrap(),
+            // Handle specific header variables
             h if h.starts_with("header.") => {
                 let header_name = &h[7..]; // Remove "header." prefix
                 if self.headers.contains_key(header_name) {
@@ -49,6 +50,18 @@ impl GreqResponse {
                 }
             }
             "body" => self.body.clone().unwrap_or_default().clone(),
+
+            // Handle body variables that start with "body."
+            body_json if body_json.starts_with("body.") => {
+                let json_path = &body_json[5..]; // Remove "body." prefix
+                match serde_json::from_str::<serde_json::Value>(&self.body.clone().unwrap_or_default()) {
+                    Ok(json_value) => {
+                        json_value.pointer(json_path).map_or(String::new(), |v| v.to_string())
+                    }
+                    Err(_) => String::new(),
+                }
+            }
+
             "response_milliseconds" => self.response_milliseconds.to_string(),
             _ => String::new(),
         }
