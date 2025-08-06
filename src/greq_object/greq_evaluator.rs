@@ -39,7 +39,7 @@ impl GreqEvaluator {
     }
 
     /// Extracts the value from the response based on the key.
-    fn get_response_value(greq_response: &GreqResponse, key: &str) -> String {
+    pub fn get_response_value(greq_response: &GreqResponse, key: &str) -> String {
         match key {
             "status-code" => greq_response.status_code.to_string(),
             "response-body" => greq_response.body.clone().unwrap_or_default(),

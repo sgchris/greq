@@ -246,10 +246,7 @@ impl Greq {
     }
 
     /// Evaluate the conditions in the footer of the Greq object.
-    fn evaluate(&self, greq_response: &GreqResponse) -> Result<bool, GreqError> {
-        // the final result
-        let mut result = true;
-
+    fn evaluate(&self, greq_response: &GreqResponse) -> Result<(), GreqError> {
         // "OR" group handling
         let mut current_or_group: Vec<bool> = Vec::new();
         let mut current_or_group_failures: Vec<String> = Vec::new();
@@ -263,6 +260,7 @@ impl Greq {
         for condition in &self.footer.conditions {
             // check if OR group ended
             if !condition.has_or && !current_or_group.is_empty() {
+                // check if there is at least one true condition in the OR group
                 current_or_result = current_or_group.iter().any(|&x| x);
                 if current_or_result == false {
                     // IR group failed, return
@@ -271,39 +269,36 @@ impl Greq {
                     });
                 } else {
                     current_or_group.clear();
+                    current_or_group_failures.clear();
                 }
             }
-
+                
             // condition evaluation result
             let condition_result = GreqEvaluator::evaluate(&greq_response, condition);
 
-            // check if the condition is part of an OR group
-            if condition.has_or {
-                // save the failed condition for later reporting
-                if condition_result == false {
-                    current_or_group_failures.push(format!("{:?}", condition));
-                }
-
-                current_or_group.push(condition_result);
-            } else {
-                // if the condition is not part of an OR group, evaluate it directly
-                if condition_result == false {
-                    return Err(GreqError::ConditionEvaluationFailed {
-                        original_condition: condition.original_line.clone(),
-                    });
-                }
+            // treat every condition as if it's an OR group (until the next condition that doesn't start with OR)
+            if condition_result == false {
+                current_or_group_failures.push(format!(
+                    "{} (actual value: {})",
+                    condition.original_line.clone(),
+                    GreqEvaluator::get_response_value(greq_response, &condition.key)
+                ));
             }
+
+            current_or_group.push(condition_result);
         }
 
         // Handle any remaining OR conditions
         if !current_or_group.is_empty() {
             current_or_result = current_or_group.iter().any(|&x| x);
-            if !current_or_result {
-                result = false;
+            if current_or_result == false {
+                return Err(GreqError::ConditionEvaluationFailed {
+                    original_condition: current_or_group_failures.join(" OR "),
+                });
             }
         }
 
-        Ok(result)
+        Ok(())
     }
 
     /// Execute the request and return a boxed future.
