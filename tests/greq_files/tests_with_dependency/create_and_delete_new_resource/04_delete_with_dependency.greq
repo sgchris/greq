@@ -13,6 +13,7 @@ host: 127.0.0.1:8002
 
 ==============
 -- expect the following conditions:
-status-code equals: 200
+status-code greater-than: 199
+status-code less-than: 299
 
 

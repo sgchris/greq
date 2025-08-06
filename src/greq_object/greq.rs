@@ -77,7 +77,7 @@ impl Greq {
                             }
                         })?;
 
-                    println!("Dependency Greq file executed successfully");
+                    println!("Dependency Greq file executed successfully. File: {}", dependency_greq_file);
                     dependency_execution_result_option = _dependency_execution_result_option;
                 }
             }
@@ -209,7 +209,7 @@ impl Greq {
         }
 
         // Execute the request
-        print!("sending request to '{}'...", full_url);
+        print!("sending {} request to '{}'...", self.content.method, full_url);
         let start_time = std::time::Instant::now();
         let raw_response = request_builder.send().await;
         let elapsed_time = start_time.elapsed().as_millis() as u64;
