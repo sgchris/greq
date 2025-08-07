@@ -15,7 +15,9 @@ All the code must be used. Don't add flags that allow keeping unused code.
 
 Add a description above every method, struct or enum.
 
-Make sure the build is successful without errors and warnings. 
+Make sure the build is successful without errors and warnings. Fix everything until it's compiling successfully.
+
+You have full permissions to use `cargo build` and `cargo test`.
 
 Parts of the app that may be executed in parallel should be executed in parallel.
 
