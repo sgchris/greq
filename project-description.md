@@ -41,6 +41,8 @@ Here is a list of supported properties.
 | extends | Defines the "base" greq file that the current file extends | `extends: base-request.
 | number-of-retries | How many retries to execute in case of failing response from the host | `number-of-retries: 3` |
 | depends-on | Defines which greq file should be executed before processing the current file. The file may be provided without the `.greq` extension. It may be an absolute path or a path relative to the current file | `depends-on: auth-setup`,<br>`depends-on: /path/to/sign-in.greq` |
+| timeout | Set the max timeout for the request in milliseconds | `timeout: 5000` |
+
 
 ### The content section
 
@@ -115,8 +117,8 @@ Every condition must define a comparison operator.
 | `equals` | Exact match comparison | `status-code equals: 200` |
 | `contains` | Checks if the value contains the specified substring | `response-body contains: success` |
 | `matches-regex` | Matches against a regular expression pattern | `headers.content-type matches-regex: ^application/json.*$` |
-| `less-than` | Numeric comparison, checks if value is less than specified number | `status-code less-than: 400` |
-| `greater-than` | Numeric comparison, checks if value is greater than specified number | `response-body.count greater-than: 0` |
+| `less-than`, `less-than-or-equal` | Numeric comparison, checks if value is less than specified number | `status-code less-than: 400` |
+| `greater-than`, `greater-than-or-equal` | Numeric comparison, checks if value is greater than specified number | `response-body.count greater-than: 0` |
 | `starts-with` | Checks if the value starts with the specified string | `response-body.name starts-with: test_` |
 | `ends-with` | Checks if the value ends with the specified string | `headers.content-type ends-with: charset=utf-8` |
 | `exists` | check if a property exists or not. Expects a boolean value. Used mainly to check if a specific header provided or not, in the response | `headers.X-Custom-Header exists: true`<br>, `headers.X-Custom-Bad-Header exists: false`|
@@ -269,7 +271,7 @@ The file `delete-resource.greq`. In this file we use the response body of the 'c
 project: delete a resource test
 depends-on: create-resource   <--- define a dependency
 ====
-DELETE /api/resources/$(dependency.response-body)   <--- Use the response in the URI
+DELETE /api/resources/$(dependency.response-body)   <--- Use the response body in the URI
 host: example.com
 ====
 status-code equals: 200
