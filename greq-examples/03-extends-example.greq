@@ -1,0 +1,10 @@
+extends: base-config.greq
+project: extended-test
+
+====
+
+GET /json HTTP/1.1
+
+====
+
+response-body contains: slideshow

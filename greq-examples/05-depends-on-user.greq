@@ -1,0 +1,14 @@
+project: use-created-user
+is-http: true
+depends-on: 04-create-user.greq
+
+====
+
+GET /get?user_id={{04-create-user.response-body.json.user_id}} HTTP/1.1
+host: httpbin.org
+authorization: Bearer {{04-create-user.response-body.json.user_id}}
+
+====
+
+status-code equals: 200
+response-body contains: user_id

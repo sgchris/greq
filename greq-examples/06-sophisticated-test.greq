@@ -1,0 +1,33 @@
+project: sophisticated-api-test
+is-http: true
+
+====
+
+PUT /put HTTP/1.1
+host: httpbin.org
+content-type: application/json
+x-test-header: sophisticated-test
+
+{
+  "operation": "update",
+  "data": {
+    "items": [
+      {"id": 1, "name": "item1", "active": true},
+      {"id": 2, "name": "item2", "active": false}
+    ],
+    "metadata": {
+      "version": "1.2.3",
+      "timestamp": "2025-08-08T00:00:00Z"
+    }
+  }
+}
+
+====
+
+status-code equals: 200
+or status-code equals: 201
+response-body contains: json
+response-body contains: operation
+not response-body contains: error
+latency less-than: 5000
+headers contains: content-type

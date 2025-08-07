@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 /// Replace placeholders in a string with values from dependency response
 pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Result<String> {
-    let placeholder_regex = Regex::new(r"\$\((dep(?:endency)?\.[\w\.\[\]-]+)\)")?;
+    let placeholder_regex = Regex::new(r"\{\{([\w\.\[\]-]+)\}\}")?;
     let mut result = text.to_string();
     
     for capture in placeholder_regex.captures_iter(text) {
@@ -24,16 +24,16 @@ pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Resul
 fn extract_value_from_response(path: &str, response: &Response) -> Result<String> {
     log::debug!("Extracting value for path: {}", path);
     
-    // Remove 'dependency.' or 'dep.' prefix
-    let path = if path.starts_with("dependency.") {
-        &path[11..]
-    } else if path.starts_with("dep.") {
-        &path[4..]
-    } else {
+    // Handle file-name-based paths like "04-create-user.response-body.json.user_id"
+    let parts: Vec<&str> = path.split('.').collect();
+    if parts.len() < 2 {
         return Err(GreqError::Placeholder(format!("Invalid placeholder path: {}", path)));
-    };
+    }
     
-    match path {
+    // Skip the file name part and get the actual path
+    let actual_path = &parts[1..].join(".");
+    
+    match actual_path.as_str() {
         "status-code" => Ok(response.status_code.to_string()),
         "latency" => Ok(response.latency.as_millis().to_string()),
         "headers" => {
@@ -42,14 +42,14 @@ fn extract_value_from_response(path: &str, response: &Response) -> Result<String
         },
         "response-body" => Ok(response.body.clone()),
         _ => {
-            if path.starts_with("headers.") {
-                let header_name = &path[8..].to_lowercase();
+            if actual_path.starts_with("headers.") {
+                let header_name = &actual_path[8..].to_lowercase();
                 Ok(response.headers.get(header_name).cloned().unwrap_or_default())
-            } else if path.starts_with("response-body.") {
-                let json_path = &path[14..];
+            } else if actual_path.starts_with("response-body.") {
+                let json_path = &actual_path[14..];
                 extract_json_path(&response.body, json_path)
             } else {
-                Err(GreqError::Placeholder(format!("Unknown placeholder path: {}", path)))
+                Err(GreqError::Placeholder(format!("Unknown placeholder path: {}", actual_path)))
             }
         }
     }

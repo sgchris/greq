@@ -95,6 +95,14 @@ fn extract_condition_value(key: &ConditionKey, response: &Response) -> Result<St
         ConditionKey::StatusCode => Ok(response.status_code.to_string()),
         ConditionKey::Latency => Ok(response.latency.as_millis().to_string()),
         ConditionKey::ResponseBody => Ok(response.body.clone()),
+        ConditionKey::Headers => {
+            // Return all headers as a formatted string for contains checks
+            let headers_str = response.headers.iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .collect::<Vec<_>>()
+                .join("\n");
+            Ok(headers_str)
+        },
         ConditionKey::Header(header_name) => {
             Ok(response.headers.get(&header_name.to_lowercase()).cloned().unwrap_or_default())
         },
@@ -289,6 +297,7 @@ fn format_condition_key(key: &ConditionKey) -> String {
         ConditionKey::StatusCode => "status-code".to_string(),
         ConditionKey::Latency => "latency".to_string(),
         ConditionKey::ResponseBody => "response-body".to_string(),
+        ConditionKey::Headers => "headers".to_string(),
         ConditionKey::Header(name) => format!("headers.{}", name),
         ConditionKey::ResponseBodyPath(path) => format!("response-body.{}", path),
     }

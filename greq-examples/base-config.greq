@@ -1,0 +1,12 @@
+project: base-httpbin-config
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+user-agent: Greq/1.0
+
+====
+
+status-code less-than: 500

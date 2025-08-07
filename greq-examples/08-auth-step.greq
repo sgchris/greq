@@ -1,0 +1,19 @@
+project: auth-step
+is-http: true
+
+====
+
+POST /post HTTP/1.1
+host: httpbin.org
+content-type: application/json
+
+{
+  "username": "admin",
+  "password": "secret123",
+  "grant_type": "password"
+}
+
+====
+
+status-code equals: 200
+response-body contains: json

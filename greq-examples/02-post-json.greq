@@ -1,0 +1,20 @@
+project: post-with-json
+is-http: true
+
+====
+
+POST /post HTTP/1.1
+host: httpbin.org
+content-type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "age": 30
+}
+
+====
+
+status-code equals: 200
+response-body contains: json
+response-body contains: John Doe

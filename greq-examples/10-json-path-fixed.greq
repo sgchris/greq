@@ -1,0 +1,15 @@
+project: json-path-test
+is-http: true
+
+====
+
+GET /json HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
+response-body.slideshow.title equals: Sample Slide Show
+response-body.slideshow.author equals: Yours Truly
+response-body.slideshow.slides[0].title equals: Wake up to WonderWidgets!
+response-body.slideshow.slides[1].items[0] contains: WonderWidgets

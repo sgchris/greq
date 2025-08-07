@@ -1,0 +1,16 @@
+project: fetch-data-with-auth
+is-http: true
+depends-on: 08-auth-step.greq
+
+====
+
+GET /bearer HTTP/1.1
+host: httpbin.org
+authorization: Bearer token-from-{{08-auth-step.response-body.json.username}}
+x-request-id: {{08-auth-step.response-body.json.username}}-request
+
+====
+
+status-code equals: 200
+headers.content-type contains: json
+response-body contains: authenticated

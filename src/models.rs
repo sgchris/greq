@@ -59,6 +59,7 @@ pub struct Condition {
 #[derive(Debug, Clone)]
 pub enum ConditionKey {
     StatusCode,
+    Headers,
     Header(String),
     ResponseBody,
     ResponseBodyPath(String),

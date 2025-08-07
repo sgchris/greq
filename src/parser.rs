@@ -251,6 +251,8 @@ fn parse_condition_key(key_str: &str) -> Result<ConditionKey> {
         Ok(ConditionKey::Latency)
     } else if key_str == "response-body" {
         Ok(ConditionKey::ResponseBody)
+    } else if key_str == "headers" {
+        Ok(ConditionKey::Headers)
     } else if key_str.starts_with("headers.") {
         let header_name = key_str[8..].to_string();
         Ok(ConditionKey::Header(header_name))
