@@ -32,24 +32,18 @@ impl GreqResponse {
         }
 
         match the_var {
-            "status_code" => self.status_code.to_string(),
-            "reason_phrase" => self.reason_phrase.clone(),
-            "evaluation_result" => if self.evaluation_result { 
-                "true".to_string() 
-            } else { 
-                "false".to_string() 
-            },
+            "status-code" => self.status_code.to_string(),
             "headers" => serde_json::to_string(&self.headers).unwrap(),
             // Handle specific header variables
-            h if h.starts_with("header.") => {
-                let header_name = &h[7..]; // Remove "header." prefix
+            h if h.starts_with("headers.") => {
+                let header_name = &h[8..]; // Remove "headers." prefix
                 if self.headers.contains_key(header_name) {
                     self.headers[header_name].clone()
                 } else {
                     String::new()
                 }
             }
-            "body" => self.body.clone().unwrap_or_default().clone(),
+            "response-body" => self.body.clone().unwrap_or_default().clone(),
 
             // Handle body variables that start with "body."
             body_json if body_json.starts_with("body.") => {
@@ -62,7 +56,7 @@ impl GreqResponse {
                 }
             }
 
-            "response_milliseconds" => self.response_milliseconds.to_string(),
+            "latency" => self.response_milliseconds.to_string(),
             _ => String::new(),
         }
     }

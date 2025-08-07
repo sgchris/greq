@@ -26,10 +26,10 @@ Here is a list of supported properties.
 | Property Name | Description | Example |
 |---------------|-------------|---------|
 | project | The name of the test project | `project: my API test` |
-| is-http | Send the request as http or https | `is-http: true` |
+| is-http | Send the request as http or https. Default false | `is-http: true` |
 | delimiter | The delimiter character used as sections separator | `delimiter: $` |
 | extends | Defines the "base" greq file that the current file extends | `extends: base-request.greq` |
-| depends-on | Defines which greq file should be executed before processing the current file | `depends-on: auth-setup.greq` |
+| depends-on | Defines which greq file should be executed before processing the current file. The file may be provided without the `.greq` extension. It may be an absolute path or a path relative to the current file | `depends-on: auth-setup`,<br>`depends-on: /path/to/sign-in.greq` |
 
 ### The content section
 
@@ -114,7 +114,7 @@ A condition may add modifiers or flags
 
 | Modifier | Description | Example |
 |----------|-------------|---------|
-| `case-sensitive` | Makes string comparisons case-sensitive (default is case-insensitive) | `response-body contains case-sensitive: Success` |
+| `case-sensitive` | Makes string comparisons case-sensitive (default is case-insensitive). Default false | `response-body contains case-sensitive: Success` |
 
 ## Use cases
 
@@ -218,4 +218,47 @@ DELETE /api/resources/my_resource
 
 ## Placeholders
 
-Greq files can define dependant requests (this scenario described below
+Greq files that define dependant requests, may use placeholders that will then be replaces with the relevant part of the response of the dependant request.
+
+The placeholders have the following format `$(dependency.status_code)`.
+
+The names of these placeholders must begin with `dependency.` (or the short for `dep.`), and then the actual part that we want to use.
+
+### The available parts
+
+| Placeholder | Description | Example |
+|--|--|--|
+| dependency.status-code | The status code of the dependant request | `$(dependency.status-code)` |
+| dependency.headers | All the headers serialized as JSON | `$(dependency.headers)` |
+| dependency.headers.<header name> | a specific response header | `$(dependency.headers.content-type)` |
+| dependency.response-body | The whole response body as a string | `$(dependency.response-body)` |
+| dependency.response-body.<JSON path> | The serialized internal part of the response body when it is in JSON format | `$(dependency.response-body.items[0].id)` |
+| dependency.latency | The amount of milliseconds took the dependant request to complete | `$(dependency.latency)` |
+
+### Placeholders usage example
+
+Assume that the API that creates resources, responds with the new resource ID
+
+```http
+project: test placeholders
+====
+POST /api/resources
+host: example.com
+
+{"name":"my_resource"}
+====
+status-code equals: 200
+```
+
+The file `delete-resource.greq`. In this file we use the response body of the 'create-resource' API call, as part of the URI of the delete request.
+
+```http
+project: delete a resource test
+depends-on: create-resource   <--- define a dependency
+====
+DELETE /api/resources/$(dependency.response-body)   <--- Use the response in the URI
+host: example.com
+====
+status-code equals: 200
+```
+

@@ -60,3 +60,5 @@ add many tests for this case.
 28. add `exists` to footer conditions. Used to test that some headers exist
 
 29. For 'delete' requests don't send the request body. (check other request methods)
+
+30. Change placehoders to use dashes rather than underscores for consistency. `status-code` instead of `status_code`
