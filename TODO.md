@@ -39,12 +39,24 @@ add many tests for this case.
 
 17. Merge the request body with the base request body if the `merge-json-body` header is set to true.
 
-18. Add optional retries
-
-19. fix when content part has no "host"
+18. Add optional retries. `number-of-retries` property in the header
 
 20. fix error messages
 
 21. add conditional dependency
 
 22. add the option to export variables (for dependant requests)
+
+23. Check if a header is a numeric value. Support greater|less-than in this case
+
+24. Add response body json parsing support. A condition like `response-body.project.myProj.id starts-with: myproj`. Check the correct format for `pointer` method. Does it accept dots or just slashes.
+
+25. check that `is-http` can be extended (convert to `Option<bool>`)
+
+26. add `override-request-body` property to the header. When you want to extend a greq, but without a request body
+
+27. add `latency` to footer conditions
+
+28. add `exists` to footer conditions. Used to test that some headers exist
+
+29. For 'delete' requests don't send the request body. (check other request methods)
