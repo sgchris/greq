@@ -1,0 +1,12 @@
+project: use-invalid-dependency
+is-http: true
+depends-on: test-invalid-dep.greq
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

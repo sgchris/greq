@@ -48,8 +48,8 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                         file_path: file_path.display().to_string(),
                         success: false,
                         response: None,
-                        failed_conditions: vec!["Dependency conditions failed".to_string()],
-                        error: Some(format!("Dependency failed: {}", dep_failed_conditions.join(", "))),
+                        failed_conditions: vec![format!("Dependency '{}' conditions failed", depends_on)],
+                        error: Some(format!("Dependency '{}' failed: {}", depends_on, dep_failed_conditions.join(", "))),
                     });
                 }
                 Some(dep_response)
@@ -60,7 +60,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     success: false,
                     response: None,
                     failed_conditions: Vec::new(),
-                    error: Some(format!("Dependency request failed: {e}")),
+                    error: Some(format!("Dependency '{}' request failed: {e}", depends_on)),
                 });
             }
         }

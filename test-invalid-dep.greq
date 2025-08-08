@@ -1,0 +1,11 @@
+project: invalid-request
+is-http: true
+
+====
+
+GET /test HTTP/1.1
+host: invalid-host-that-does-not-exist.example
+
+====
+
+status-code equals: 200
