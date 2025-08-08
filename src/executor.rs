@@ -24,13 +24,8 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         
         let mut greq_file = parse_greq_file(&dep_path)?;
         
-        // Handle extends
-        if let Some(extends_path) = &greq_file.header.extends.clone() {
-            log::info!("Loading base request from: {extends_path}");
-            let base_path = resolve_file_path(&dep_path, extends_path);
-            let base_greq = parse_greq_file(&base_path)?;
-            greq_file = merge_greq_files(&base_greq, &greq_file)?;
-        }
+        // Handle extends recursively
+        greq_file = resolve_extends_chain(greq_file, &dep_path)?;
         
         // Replace placeholders if we have a dependency response
         if let Some(depends_on) = &greq_file.header.depends_on {
@@ -132,6 +127,43 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         failed_conditions: Vec::new(),
         error: Some("Unexpected end of execution".to_string()),
     })
+}
+
+/// Resolve the extends chain for a GreqFile recursively
+fn resolve_extends_chain(mut greq_file: GreqFile, current_file_path: &Path) -> Result<GreqFile> {
+    let mut visited = HashSet::new();
+    let mut current_path = current_file_path.to_path_buf();
+    
+    // Keep resolving extends until we reach the root or detect a cycle
+    while let Some(extends_path) = greq_file.header.extends.clone() {
+        log::info!("Loading base request from: {extends_path}");
+        
+        let base_path = resolve_file_path(&current_path, &extends_path);
+        let canonical_base_path = base_path.canonicalize()
+            .unwrap_or_else(|_| base_path.clone());
+        
+        // Check for circular extends
+        if visited.contains(&canonical_base_path) {
+            return Err(GreqError::Parse(format!(
+                "Circular extends detected: {} -> {}", 
+                current_path.display(), 
+                base_path.display()
+            )));
+        }
+        
+        visited.insert(canonical_base_path.clone());
+        
+        // Load the base file
+        let base_greq = parse_greq_file(&base_path)?;
+        
+        // Merge current file with base (current file overrides base)
+        greq_file = merge_greq_files(&base_greq, &greq_file)?;
+        
+        // Update current path for next iteration
+        current_path = base_path;
+    }
+    
+    Ok(greq_file)
 }
 
 /// Resolve the full dependency chain for a file, returning paths in execution order

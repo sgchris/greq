@@ -1,0 +1,10 @@
+extends: test-base-simple.greq
+
+====
+
+GET /get HTTP/1.1
+x-custom: my another value
+
+====
+
+status-code equals: 200

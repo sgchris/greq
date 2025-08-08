@@ -306,17 +306,18 @@ pub fn merge_greq_files(base: &GreqFile, extending: &GreqFile) -> Result<GreqFil
     
     let mut merged = base.clone();
     
-    // Override header properties if specified in extending file
+    // Merge header properties - extending file overrides base properties
     if extending.header.project.is_some() {
         merged.header.project = extending.header.project.clone();
     }
-    if extending.header.is_http != base.header.is_http {
+    // For boolean fields, only override if extending file explicitly sets them differently
+    if extending.header.is_http != Header::default().is_http {
         merged.header.is_http = extending.header.is_http;
     }
-    if extending.header.delimiter != base.header.delimiter {
+    if extending.header.delimiter != Header::default().delimiter {
         merged.header.delimiter = extending.header.delimiter.clone();
     }
-    if extending.header.number_of_retries != base.header.number_of_retries {
+    if extending.header.number_of_retries != Header::default().number_of_retries {
         merged.header.number_of_retries = extending.header.number_of_retries;
     }
     if extending.header.timeout.is_some() {
@@ -325,28 +326,57 @@ pub fn merge_greq_files(base: &GreqFile, extending: &GreqFile) -> Result<GreqFil
     if extending.header.depends_on.is_some() {
         merged.header.depends_on = extending.header.depends_on.clone();
     }
+    // Note: extends field is not inherited - each file manages its own extends
     
-    // Always use the extending file's request line (required)
-    merged.content.request_line = extending.content.request_line.clone();
+    // Merge content section
+    // If extending file has content, use its request line, otherwise keep base
+    // In practice, most extending files will override the request line
+    if !extending.content.headers.is_empty() || extending.content.body.is_some() ||
+       extending.content.request_line.method != "GET" || extending.content.request_line.uri != "/" {
+        merged.content.request_line = extending.content.request_line.clone();
+    }
     
-    // Merge headers (extending overrides base)
+    // Merge headers - start with base headers, then add/override with extending headers
     for (key, value) in &extending.content.headers {
         merged.content.headers.insert(key.clone(), value.clone());
     }
     
-    // Use extending file's body if present
+    // Use extending file's body if present, otherwise keep base body
     if extending.content.body.is_some() {
         merged.content.body = extending.content.body.clone();
     }
     
-    // Use extending file's conditions if present
-    if !extending.footer.conditions.is_empty() {
-        merged.footer = extending.footer.clone();
+    // Merge footer conditions - extending file adds to or overrides base conditions
+    // First, add all base conditions that don't conflict with extending conditions
+    let mut merged_conditions = Vec::new();
+    
+    // Add all base conditions first
+    for base_condition in &base.footer.conditions {
+        merged_conditions.push(base_condition.clone());
     }
     
+    // Add extending conditions, but replace any that have the same key
+    for extending_condition in &extending.footer.conditions {
+        // Remove any base condition with the same key
+        merged_conditions.retain(|base_cond| !conditions_have_same_key(base_cond, extending_condition));
+        // Add the extending condition
+        merged_conditions.push(extending_condition.clone());
+    }
+    
+    merged.footer.conditions = merged_conditions;
     merged.file_path = extending.file_path.clone();
     
     Ok(merged)
+}
+
+/// Check if two conditions have the same key (for merging purposes)
+fn conditions_have_same_key(cond1: &Condition, cond2: &Condition) -> bool {
+    std::mem::discriminant(&cond1.key) == std::mem::discriminant(&cond2.key) &&
+    match (&cond1.key, &cond2.key) {
+        (ConditionKey::Header(h1), ConditionKey::Header(h2)) => h1 == h2,
+        (ConditionKey::ResponseBodyPath(p1), ConditionKey::ResponseBodyPath(p2)) => p1 == p2,
+        _ => true, // For non-parameterized keys, they're the same if discriminants match
+    }
 }
 
 /// Resolve file path relative to current file

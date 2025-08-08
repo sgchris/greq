@@ -1,13 +1,13 @@
-project: dep-chain-final
+project: ext example
 is-http: true
-depends-on: test-dep-b.greq
 
 ====
 
 GET /uuid HTTP/1.1
 host: httpbin.org
+content-type: application/json
+x-custom: my val
 
 ====
 
 status-code equals: 200
-response-body contains: uuid

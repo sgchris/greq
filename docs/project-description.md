@@ -134,6 +134,15 @@ A condition may add modifiers or flags
 |----------|-------------|---------|
 | `case-sensitive` | Makes string comparisons case-sensitive (default is case-insensitive). Default false | `response-body contains case-sensitive: Success` |
 
+## Extending
+
+When a Greq file extends another Greq file, that includes all the sections in the files.
+The header part should contain all the properties of the extending Greq, and override or add properties that are defined in the current Greq file.
+
+The content part should contain the request body and all the headers defined in the extending Greq file, and the current Greq only overrides or adds headers. When the current Greq file has a response body, it overrides the response body of the extending Greq
+
+The footer conditions should be merged as well. The result should contain all the conditions defined in the extending Greq's footer, and the current Greq's footer overrides or adds conditions. The override occurs when the condition is similar, for example when the base condition has `status-code equals: 404` and the current Greq footer contains `status-code equals: 200`, the latter overrides that condition line.
+
 ## Use cases
 
 ### A single request

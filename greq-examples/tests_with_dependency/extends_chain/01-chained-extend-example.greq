@@ -6,7 +6,7 @@ is-http: true
 extends: template
 
 ==============
-GET /myproj/index.php
+GET /myproj/non_existing_resource
 
 ==============
 -- expect the following conditions:

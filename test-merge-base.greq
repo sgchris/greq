@@ -1,11 +1,12 @@
-project: dep-chain-middle
+project: merge demo
 is-http: true
-depends-on: test-dep-a.greq
 
 ====
 
 GET /uuid HTTP/1.1
 host: httpbin.org
+content-type: application/json
+x-base-header: base-value
 
 ====
 
