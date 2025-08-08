@@ -17,22 +17,22 @@ pub fn init_logger() -> crate::Result<()> {
     
     let mut builder = Builder::new();
     
-    // Set log level from environment or default to Info
+    // Set log level from environment or default based on build type
+    let default_level = if cfg!(debug_assertions) { "info" } else { "warn" };
     let level = env::var("RUST_LOG")
-        .unwrap_or_else(|_| "info".to_string())
+        .unwrap_or_else(|_| default_level.to_string())
         .parse()
-        .unwrap_or(LevelFilter::Info);
+        .unwrap_or(if cfg!(debug_assertions) { LevelFilter::Info } else { LevelFilter::Warn });
     
     builder
         .filter_level(level)
         .format(|buf, record| {
+            // Simplified format for console - no file paths/line numbers
             writeln!(
                 buf,
-                "[{} {} {}:{}] {}",
+                "[{} {}] {}",
                 chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 record.level(),
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
                 record.args()
             )
         })

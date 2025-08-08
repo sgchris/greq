@@ -22,15 +22,15 @@ struct Cli {
 async fn main() {
     let cli = Cli::parse();
     
+    // Set log level based on verbose flag before logger initialization
+    if cli.verbose {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    
     // Initialize logger
     if let Err(e) = logger::init_logger() {
         eprintln!("Failed to initialize logger: {e}");
         process::exit(1);
-    }
-    
-    // Set log level based on verbose flag
-    if cli.verbose {
-        std::env::set_var("RUST_LOG", "debug");
     }
     
     println!("{}", "Greq - Web API Tester".bold().blue());
