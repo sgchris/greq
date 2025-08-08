@@ -22,7 +22,7 @@ Run the CLI locally (example):
 cargo run --release -- .\greq-examples\tests_with_dependency\base_greq_files\01-simple-get.greq
 ```
 
-For playground, testing or just for fun, it's recommended to check out [Grecho - echo server](https://github.com/sgchris/grecho), or (GResources - Simple RESTFul API for resources management)[https://github.com/sgchris/gresources].
+For playground, testing or just for fun, it's recommended to check out [Grecho - echo server](https://github.com/sgchris/grecho), or [GResources - Simple RESTFul API for resources management](https://github.com/sgchris/gresources).
 
 
 ## How to contribute
