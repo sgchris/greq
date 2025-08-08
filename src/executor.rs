@@ -4,115 +4,179 @@ use crate::placeholders::replace_placeholders_in_greq_file;
 use crate::conditions::evaluate_conditions;
 use crate::error::{GreqError, Result};
 use reqwest::Client;
-use std::collections::HashMap;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use colored::*;
 
 /// Execute a single Greq file with dependency resolution
 pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<ExecutionResult> {
     let file_path = file_path.as_ref();
-    log::info!("Executing greq file: {file_path:?}");
     
-    let mut greq_file = parse_greq_file(file_path)?;
+    // Resolve the full dependency chain
+    let dependency_chain = resolve_dependency_chain(file_path)?;
     
-    // Handle extends
-    if let Some(extends_path) = &greq_file.header.extends.clone() {
-        log::info!("Loading base request from: {extends_path}");
-        let base_path = resolve_file_path(file_path, extends_path);
-        let base_greq = parse_greq_file(&base_path)?;
-        greq_file = merge_greq_files(&base_greq, &greq_file)?;
-    }
+    // Execute dependencies in order (from root to target)
+    let mut dependency_responses: HashMap<PathBuf, Response> = HashMap::new();
     
-    // Handle dependencies - execute dependency first if exists
-    let dependency_response = if let Some(depends_on) = &greq_file.header.depends_on.clone() {
-        log::info!("Executing dependency: {depends_on}");
-        let dep_path = resolve_file_path(file_path, depends_on);
+    for dep_path in dependency_chain {
+        log::info!("Executing greq file: {dep_path:?}");
         
-        // Load and execute dependency (without its own dependencies to avoid recursion)
-        let mut dep_greq = parse_greq_file(&dep_path)?;
+        let mut greq_file = parse_greq_file(&dep_path)?;
         
-        // Handle extends for dependency
-        if let Some(dep_extends_path) = &dep_greq.header.extends.clone() {
-            let dep_base_path = resolve_file_path(&dep_path, dep_extends_path);
-            let dep_base_greq = parse_greq_file(&dep_base_path)?;
-            dep_greq = merge_greq_files(&dep_base_greq, &dep_greq)?;
+        // Handle extends
+        if let Some(extends_path) = &greq_file.header.extends.clone() {
+            log::info!("Loading base request from: {extends_path}");
+            let base_path = resolve_file_path(&dep_path, extends_path);
+            let base_greq = parse_greq_file(&base_path)?;
+            greq_file = merge_greq_files(&base_greq, &greq_file)?;
         }
         
-        // Execute dependency HTTP request
-        match execute_http_request(&dep_greq).await {
-            Ok(dep_response) => {
-                let dep_failed_conditions = evaluate_conditions(&dep_greq.footer.conditions, &dep_response)?;
-                if !dep_failed_conditions.is_empty() {
+        // Replace placeholders if we have a dependency response
+        if let Some(depends_on) = &greq_file.header.depends_on {
+            let dep_response_path = resolve_file_path(&dep_path, depends_on);
+            if let Some(dep_response) = dependency_responses.get(&dep_response_path) {
+                replace_placeholders_in_greq_file(&mut greq_file, dep_response)?;
+            }
+        }
+        
+        // Execute the HTTP request
+        match execute_http_request(&greq_file).await {
+            Ok(response) => {
+                // Evaluate conditions
+                let failed_conditions = evaluate_conditions(&greq_file.footer.conditions, &response)?;
+                
+                if !failed_conditions.is_empty() {
+                    let dep_name = dep_path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown");
+                    
+                    if dep_path == file_path {
+                        // This is the main file failing
+                        return Ok(ExecutionResult {
+                            file_path: file_path.display().to_string(),
+                            success: false,
+                            response: Some(response),
+                            failed_conditions,
+                            error: None,
+                        });
+                    } else {
+                        // This is a dependency failing
+                        return Ok(ExecutionResult {
+                            file_path: file_path.display().to_string(),
+                            success: false,
+                            response: None,
+                            failed_conditions: vec![format!("Dependency '{}' conditions failed", dep_name)],
+                            error: Some(format!("Dependency '{}' failed: {}", dep_name, failed_conditions.join(", "))),
+                        });
+                    }
+                }
+                
+                // Store response for future dependencies
+                dependency_responses.insert(dep_path.clone(), response.clone());
+                
+                if dep_path != file_path {
+                    let dep_name = dep_path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown");
+                    log::info!("✓ Dependency '{}' executed successfully", dep_name);
+                }
+                
+                // If this is the main file, return success
+                if dep_path == file_path {
+                    let success = failed_conditions.is_empty();
+                    log::info!("✓ {} - All conditions passed", file_path.display());
+                    
+                    return Ok(ExecutionResult {
+                        file_path: file_path.display().to_string(),
+                        success,
+                        response: Some(response),
+                        failed_conditions,
+                        error: None,
+                    });
+                }
+            },
+            Err(e) => {
+                let dep_name = dep_path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+                    
+                if dep_path == file_path {
+                    // This is the main file failing
                     return Ok(ExecutionResult {
                         file_path: file_path.display().to_string(),
                         success: false,
                         response: None,
-                        failed_conditions: vec![format!("Dependency '{}' conditions failed", depends_on)],
-                        error: Some(format!("Dependency '{}' failed: {}", depends_on, dep_failed_conditions.join(", "))),
+                        failed_conditions: Vec::new(),
+                        error: Some(format!("HTTP error: {e}")),
+                    });
+                } else {
+                    // This is a dependency failing
+                    return Ok(ExecutionResult {
+                        file_path: file_path.display().to_string(),
+                        success: false,
+                        response: None,
+                        failed_conditions: Vec::new(),
+                        error: Some(format!("Dependency '{}' request failed: {e}", dep_name)),
                     });
                 }
-                log::info!("✓ Dependency '{}' executed successfully", depends_on);
-                Some(dep_response)
-            },
-            Err(e) => {
-                return Ok(ExecutionResult {
-                    file_path: file_path.display().to_string(),
-                    success: false,
-                    response: None,
-                    failed_conditions: Vec::new(),
-                    error: Some(format!("Dependency '{}' request failed: {e}", depends_on)),
-                });
             }
         }
-    } else {
-        None
-    };
-    
-    // Replace placeholders if we have a dependency response
-    if let Some(ref dep_response) = dependency_response {
-        replace_placeholders_in_greq_file(&mut greq_file, dep_response)?;
     }
     
-    // Execute the HTTP request
-    match execute_http_request(&greq_file).await {
-        Ok(response) => {
-            // Evaluate conditions
-            let failed_conditions = evaluate_conditions(&greq_file.footer.conditions, &response)?;
-            let success = failed_conditions.is_empty();
+    // This should never be reached, but just in case
+    Ok(ExecutionResult {
+        file_path: file_path.display().to_string(),
+        success: false,
+        response: None,
+        failed_conditions: Vec::new(),
+        error: Some("Unexpected end of execution".to_string()),
+    })
+}
+
+/// Resolve the full dependency chain for a file, returning paths in execution order
+fn resolve_dependency_chain<P: AsRef<Path>>(file_path: P) -> Result<Vec<PathBuf>> {
+    let mut chain = Vec::new();
+    let mut visited = HashSet::new();
+    let mut to_visit = vec![file_path.as_ref().to_path_buf()];
+    
+    // Build the dependency tree
+    while let Some(current_path) = to_visit.pop() {
+        let canonical_path = current_path.canonicalize()
+            .unwrap_or_else(|_| current_path.clone());
             
-            // Log result
-            if success {
-                log::info!("✓ {} - All conditions passed", file_path.display().to_string().green());
-            } else {
-                log::warn!("✗ {} - {} condition(s) failed", 
-                    file_path.display().to_string().red(),
-                    failed_conditions.len()
-                );
-                for condition in &failed_conditions {
-                    log::warn!("  Failed: {condition}");
-                }
+        if visited.contains(&canonical_path) {
+            continue; // Skip already processed files
+        }
+        
+        visited.insert(canonical_path.clone());
+        
+        // Parse the file to check for dependencies
+        let greq_file = parse_greq_file(&current_path)?;
+        
+        if let Some(depends_on) = &greq_file.header.depends_on {
+            let dep_path = resolve_file_path(&current_path, depends_on);
+            let dep_canonical = dep_path.canonicalize()
+                .unwrap_or_else(|_| dep_path.clone());
+                
+            // Check for circular dependencies
+            if visited.contains(&dep_canonical) || to_visit.contains(&dep_canonical) {
+                return Err(GreqError::Parse(format!(
+                    "Circular dependency detected: {} -> {}", 
+                    current_path.display(), 
+                    dep_path.display()
+                )));
             }
             
-            Ok(ExecutionResult {
-                file_path: file_path.display().to_string(),
-                success,
-                response: Some(response),
-                failed_conditions,
-                error: None,
-            })
-        },
-        Err(e) => {
-            log::error!("✗ {} - Request failed: {}", file_path.display().to_string().red(), e);
-            Ok(ExecutionResult {
-                file_path: file_path.display().to_string(),
-                success: false,
-                response: None,
-                failed_conditions: Vec::new(),
-                error: Some(e.to_string()),
-            })
+            to_visit.push(dep_path);
         }
+        
+        chain.push(current_path);
     }
+    
+    // Reverse to get execution order (dependencies first)
+    chain.reverse();
+    Ok(chain)
 }
 
 /// Execute the HTTP request for a GreqFile

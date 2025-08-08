@@ -1,5 +1,6 @@
-project: good-dependency
+project: dep-chain-final
 is-http: true
+depends-on: test-dep-b.greq
 
 ====
 

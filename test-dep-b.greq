@@ -1,6 +1,6 @@
-project: consumer-with-good-dependency
+project: dep-chain-middle
 is-http: true
-depends-on: test-good-dep.greq
+depends-on: test-dep-a.greq
 
 ====
 

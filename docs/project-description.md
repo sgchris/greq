@@ -27,6 +27,9 @@ Execution example:
 
 The exit code should reflect the evaluation and the overall processing response. Exit code 0 - success, exit code 1 on failure.
 
+The output of the application must show which greq files are loaded, which were extended, and which dependency files were executed. Show successful and failing processings. 
+When executing a Greq file, the user must know what was read, processed and executed, and which ones failed or succeeded. Make the output neat and readable.
+
 ### The header section
 
 The header part contains metadata and properties related to the execution of the current greq file. 
@@ -230,6 +233,13 @@ depends-on: create-resource
 DELETE /api/resources/my_resource
 ====
 ```
+
+## Dependency and extension chains
+
+A Greq file, file1.greq, may have a dependency on file2.greq, and file2.greq has dependency on file3.greq. 
+There's no limitation on the number of dependant requests, and all of them must be executed in the correct order. 
+
+Similarly with extensions. When file1.greq extends file2.greq, and file2.greq extends file3.greq, all the extensions must be honored and processed in the correct order as well. There's no limitation on the extension of Greq files.
 
 ## Placeholders
 

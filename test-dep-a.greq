@@ -1,6 +1,5 @@
-project: consumer-with-bad-dependency
+project: dep-chain-root
 is-http: true
-depends-on: test-bad-dep.greq
 
 ====
 
