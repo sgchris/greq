@@ -124,3 +124,8 @@ You have full permissions to use `cargo build` and `cargo test`.
 Parts of the app that may be executed in parallel should be executed in parallel.
 
 At some point in the future, there will be extensions to this app. Make sure you write the code accordingly, and it won't require significant refactor once the extensions are added.
+
+## Greq files examples
+
+Place your examples under `greq-examples/` folder. If there's a test suite that has several files, consider placing them in a separate folder under `greq-examples/`.
+
