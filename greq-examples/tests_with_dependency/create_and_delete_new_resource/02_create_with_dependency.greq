@@ -1,0 +1,18 @@
+-- using: GResources - online resources manager API
+--
+-- use dependency response to fill the placeholders in this file
+project: Create and delete new resource
+is-http: true
+depends-on: 01_ensure_non_existing
+
+==============
+POST /myproj/index.php
+host: 127.0.0.1:8002
+
+{"dependency": {"status-code":$(dependency.status_code)}}
+==============
+-- expect the following conditions:
+status-code equals: 200
+or status-code equals: 201
+
+

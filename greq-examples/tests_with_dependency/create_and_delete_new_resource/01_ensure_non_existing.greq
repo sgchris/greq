@@ -1,0 +1,14 @@
+-- using: GResources - online resources manager API
+--
+-- get a non existing resource
+project: Create and delete new resource
+is-http: true
+
+==============
+GET /myproj/index.php
+host: 127.0.0.1:8002
+
+==============
+-- expect the following conditions:
+status-code equals: 404
+

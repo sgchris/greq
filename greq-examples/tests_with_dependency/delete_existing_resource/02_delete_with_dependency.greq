@@ -1,0 +1,18 @@
+-- using: GResources - online resources manager API
+-- https://github.com/sgchris/gresources
+--
+-- use dependency response to fill the placeholders in this file
+--
+project: Create and delete new resource
+is-http: true
+depends-on: 01_ensure_exists
+
+==============
+DELETE /myproj/index.php
+host: 127.0.0.1:8002
+
+==============
+-- expect the following conditions:
+status-code equals: 200
+
+
