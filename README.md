@@ -1,6 +1,6 @@
 # Greq 🚀
 
-`greq` is a Rust-based command-line tool for parsing, validating, and executing HTTP-like requests from `.greq` files. Ideal for developers working with raw HTTP interactions.
+`greq` is a Rust-based command-line tool for parsing, validating, and executing HTTP-like requests from `.greq` files. Ideal for developers working with raw HTTP interactions, API developers and maintainers and test engineers.
 
 ## 🚀 Features
 

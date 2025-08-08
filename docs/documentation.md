@@ -14,9 +14,9 @@ This document provides comprehensive information about all Greq features, syntax
 8. [Command Line Interface](#command-line-interface)
 9. [Examples](#examples)
 
-## File Structure
+## Greq file structure
 
-Greq files (`.greq`) consist of three sections separated by delimiter lines:
+Greq files (`.greq`) consist of 3 sections separated by delimiter lines:
 
 ```greq
 [Header Section]
@@ -35,9 +35,9 @@ condition: value
 
 ### Section Delimiters
 
-- **Default**: Four or more equal signs (`====`) on their own line
-- **Custom**: Set via `delimiter` property in header (e.g., `delimiter: $`)
-- Empty lines and lines starting with `--` are ignored in header/footer sections
+- **Default**: At least 4 similar, non alpha-numeric characters (`====`) on one line
+- **Custom**: Set via `delimiter` property in the header part (e.g., `delimiter: $`)
+- Empty lines and lines starting with `--` are ignored in the header and the footer sections
 
 ## Header Properties
 
@@ -127,6 +127,7 @@ The footer section defines conditions to validate the HTTP response.
 | `less-than-or-equal` | Numeric comparison | `status-code less-than-or-equal: 299` |
 | `greater-than` | Numeric comparison | `latency greater-than: 100` |
 | `greater-than-or-equal` | Numeric comparison | `status-code greater-than-or-equal: 200` |
+| `exists` | Numeric comparison | `status-code greater-than-or-equal: 200` |
 
 ### Condition Modifiers
 
@@ -236,7 +237,7 @@ is-http: true
 
 GET /api/protected HTTP/1.1
 host: api.example.com
-authorization: Bearer {{auth.response-body.json.token}}
+authorization: Bearer $(dependency.response-body.token)
 
 ====
 
@@ -249,34 +250,34 @@ Extract and reuse values from dependency responses using placeholder syntax:
 
 ### Placeholder Format
 ```
-{{filename.property.path}}
+$(dependency.property-name)
 ```
 
 ### Available Properties
 
 | Property | Description | Example |
 |----------|-------------|---------|
-| `status-code` | HTTP status code | `{{auth.status-code}}` |
-| `latency` | Response time in ms | `{{auth.latency}}` |
-| `headers.name` | Response header | `{{auth.headers.set-cookie}}` |
-| `response-body.path` | JSON path | `{{auth.response-body.json.user.id}}` |
+| `status-code` | HTTP status code | `$(dependency.status-code)` |
+| `latency` | Response time in ms | `$(dependency.latency)` |
+| `headers.name` | Response header | `$(dependency.headers.set-cookie)` |
+| `response-body.<path>` | JSON path | `$(dependency.response-body.user.id)` |
 
 ### Placeholder Examples
 
 ```greq
 # Use status code
-GET /status/{{previous.status-code}} HTTP/1.1
+GET /status/$(dependency.status-code) HTTP/1.1
 
 # Use response header
-authorization: {{auth.headers.authorization}}
+authorization: $(dependency.headers.authorization)
 
 # Use JSON values
-GET /users/{{create-user.response-body.json.id}} HTTP/1.1
+GET /users/$(dependency.response-body.json.id) HTTP/1.1
 
 # In request body
 {
-  "user_id": "{{auth.response-body.json.user.id}}",
-  "session": "{{auth.response-body.json.session_token}}"
+  "user_id": "$(dependency.response-body.json.user.id)",
+  "session": "$(dependency.response-body.json.session_token)"
 }
 ```
 
@@ -430,7 +431,7 @@ project: Authenticated Request
 
 GET /profile HTTP/1.1
 host: api.example.com
-authorization: Bearer {{create-session.response-body.json.token}}
+authorization: Bearer $(dependency.response-body.token)
 
 ====
 
