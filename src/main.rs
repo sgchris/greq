@@ -1,5 +1,5 @@
-use greq2::logger;
-use greq2::executor::{execute_multiple_greq_files, print_execution_results, all_successful};
+use greq::logger;
+use greq::executor::{execute_multiple_greq_files, print_execution_results, all_successful};
 use clap::Parser;
 use colored::*;
 use std::path::PathBuf;

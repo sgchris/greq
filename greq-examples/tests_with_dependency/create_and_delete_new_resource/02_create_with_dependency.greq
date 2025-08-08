@@ -9,7 +9,7 @@ depends-on: 01_ensure_non_existing
 POST /myproj/index.php
 host: 127.0.0.1:8002
 
-{"dependency": {"status-code":$(dependency.status_code)}}
+{"dependency": {"status-code":$(dependency.status-code)}}
 ==============
 -- expect the following conditions:
 status-code equals: 200
