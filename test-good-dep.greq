@@ -1,0 +1,12 @@
+project: good-dependency
+is-http: true
+
+====
+
+GET /uuid HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
+response-body contains: uuid

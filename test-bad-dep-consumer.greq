@@ -1,0 +1,13 @@
+project: consumer-with-bad-dependency
+is-http: true
+depends-on: test-bad-dep.greq
+
+====
+
+GET /uuid HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
+response-body contains: uuid

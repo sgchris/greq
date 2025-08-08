@@ -52,6 +52,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                         error: Some(format!("Dependency '{}' failed: {}", depends_on, dep_failed_conditions.join(", "))),
                     });
                 }
+                log::info!("✓ Dependency '{}' executed successfully", depends_on);
                 Some(dep_response)
             },
             Err(e) => {
