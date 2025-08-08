@@ -158,14 +158,24 @@ fn parse_content(content_text: &str) -> Result<Content> {
 fn parse_request_line(line: &str) -> Result<RequestLine> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     
-    if parts.len() < 3 {
+    if parts.len() < 2 {
         return Err(GreqError::Parse(format!("Invalid request line: {line}")));
     }
     
+    let method = parts[0].to_uppercase();
+    let uri = parts[1].to_string();
+    
+    // Use provided version or default to HTTP/1.1
+    let version = if parts.len() >= 3 {
+        parts[2].to_string()
+    } else {
+        "HTTP/1.1".to_string()
+    };
+    
     Ok(RequestLine {
-        method: parts[0].to_uppercase(),
-        uri: parts[1].to_string(),
-        version: parts[2].to_string(),
+        method,
+        uri,
+        version,
     })
 }
 
