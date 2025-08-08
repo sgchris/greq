@@ -1,0 +1,16 @@
+-- using: GResources - online resources manager API
+--
+-- get a non existing resource
+project: extensions chain
+is-http: true
+extends: base_template
+
+==============
+GET /myproj/index.php
+host: 127.0.0.1:8002
+X-Custom-Header: custom header value
+
+==============
+-- expect the following conditions:
+status-code equals: 200
+

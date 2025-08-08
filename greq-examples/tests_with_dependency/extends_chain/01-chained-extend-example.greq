@@ -1,0 +1,14 @@
+-- using: GResources - online resources manager API
+--
+-- get a non existing resource
+project: extensions chain
+is-http: true
+extends: template
+
+==============
+GET /myproj/index.php
+
+==============
+-- expect the following conditions:
+status-code equals: 404
+
