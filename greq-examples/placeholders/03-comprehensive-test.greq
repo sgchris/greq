@@ -1,17 +1,15 @@
-project: get-user-details
+project: comprehensive-placeholder-test
 depends-on: 01-create-user.greq
 is-http: true
 
 ====
 
-GET /users/$(dependency.response-body.id) HTTP/1.1
+GET /users/$(dependency.response-body.id)/posts HTTP/1.1
 host: jsonplaceholder.typicode.com
-
-====
+x-user-id: $(dependency.response-body.id)
+x-status-code: $(dep.status-code)
 
 ====
 
 status-code equals: 200
 response-body contains: $(dependency.response-body.id)
-response-body contains: "John Doe"
-response-body contains: johndoe

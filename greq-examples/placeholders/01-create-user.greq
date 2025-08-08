@@ -1,0 +1,28 @@
+project: create-user
+is-http: true
+
+====
+
+POST /users HTTP/1.1
+host: jsonplaceholder.typicode.com
+content-type: application/json
+
+{
+  "name": "John Doe",
+  "username": "johndoe",
+  "email": "john@example.com",
+  "address": {
+    "street": "123 Main St",
+    "city": "Anytown",
+    "zipcode": "12345"
+  },
+  "phone": "555-0123",
+  "website": "johndoe.com"
+}
+
+====
+
+status-code equals: 201
+response-body contains: id
+response-body contains: name
+response-body contains: johndoe

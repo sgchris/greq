@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 /// Replace placeholders in a string with values from dependency response
 pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Result<String> {
-    let placeholder_regex = Regex::new(r"\{\{([\w\.\[\]-]+)\}\}")?;
+    let placeholder_regex = Regex::new(r"\$\(([\w\.\-\[\]]+)\)")?;
     let mut result = text.to_string();
     
     for capture in placeholder_regex.captures_iter(text) {
@@ -24,14 +24,25 @@ pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Resul
 fn extract_value_from_response(path: &str, response: &Response) -> Result<String> {
     log::debug!("Extracting value for path: {path}");
     
-    // Handle file-name-based paths like "04-create-user.response-body.json.user_id"
+    // Handle dependency-based paths like "dependency.status-code" or "dep.response-body.user.id"
     let parts: Vec<&str> = path.split('.').collect();
-    if parts.len() < 2 {
+    if parts.is_empty() {
         return Err(GreqError::Placeholder(format!("Invalid placeholder path: {path}")));
     }
     
-    // Skip the file name part and get the actual path
-    let actual_path = &parts[1..].join(".");
+    // Check if it starts with dependency prefix
+    let actual_path = if parts[0] == "dependency" || parts[0] == "dep" {
+        if parts.len() < 2 {
+            return Err(GreqError::Placeholder(format!("Invalid dependency placeholder path: {path}")));
+        }
+        parts[1..].join(".")
+    } else {
+        // Handle legacy file-name-based paths for backward compatibility
+        if parts.len() < 2 {
+            return Err(GreqError::Placeholder(format!("Invalid placeholder path: {path}")));
+        }
+        parts[1..].join(".")
+    };
     
     match actual_path.as_str() {
         "status-code" => Ok(response.status_code.to_string()),
@@ -204,7 +215,7 @@ mod tests {
     #[test]
     fn test_replace_status_code_placeholder() {
         let response = create_test_response();
-        let text = "Status: {{dependency.status-code}}";
+        let text = "Status: $(dependency.status-code)";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "Status: 200");
     }
@@ -212,7 +223,7 @@ mod tests {
     #[test]
     fn test_replace_header_placeholder() {
         let response = create_test_response();
-        let text = "Type: {{dependency.headers.content-type}}";
+        let text = "Type: $(dependency.headers.content-type)";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "Type: application/json");
     }
@@ -220,7 +231,7 @@ mod tests {
     #[test]
     fn test_replace_json_path_placeholder() {
         let response = create_test_response();
-        let text = "ID: {{dependency.response-body.id}}";
+        let text = "ID: $(dependency.response-body.id)";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "ID: 123");
     }
@@ -228,7 +239,7 @@ mod tests {
     #[test]
     fn test_replace_json_array_placeholder() {
         let response = create_test_response();
-        let text = "First item: {{dependency.response-body.items[0].id}}";
+        let text = "First item: $(dependency.response-body.items[0].id)";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "First item: 1");
     }
