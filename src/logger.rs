@@ -42,7 +42,7 @@ pub fn init_logger() -> crate::Result<()> {
     // For now, we'll use the default env_logger to stdout
     builder.init();
     
-    log::info!("Greq logger initialized. Log file: {:?}", log_file_path);
+    log::info!("Greq logger initialized. Log file: {log_file_path:?}");
     Ok(())
 }
 

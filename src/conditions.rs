@@ -80,10 +80,7 @@ fn evaluate_single_condition(condition: &Condition, response: &Response) -> Resu
     let final_result = if condition.is_not { !result } else { result };
     
     log::debug!(
-        "Condition result: {} (actual: '{}', expected: '{}')",
-        final_result,
-        actual_value,
-        expected_value
+        "Condition result: {final_result} (actual: '{actual_value}', expected: '{expected_value}')"
     );
     
     Ok(final_result)
@@ -98,7 +95,7 @@ fn extract_condition_value(key: &ConditionKey, response: &Response) -> Result<St
         ConditionKey::Headers => {
             // Return all headers as a formatted string for contains checks
             let headers_str = response.headers.iter()
-                .map(|(k, v)| format!("{}: {}", k, v))
+                .map(|(k, v)| format!("{k}: {v}"))
                 .collect::<Vec<_>>()
                 .join("\n");
             Ok(headers_str)
@@ -138,17 +135,17 @@ fn navigate_json_path(value: &Value, path: &str) -> Result<Value> {
             PathPart::Property(key) => {
                 if let Value::Object(obj) = current {
                     current = obj.get(&key)
-                        .ok_or_else(|| GreqError::ConditionFailed(format!("Property '{}' not found", key)))?;
+                        .ok_or_else(|| GreqError::ConditionFailed(format!("Property '{key}' not found")))?;
                 } else {
-                    return Err(GreqError::ConditionFailed(format!("Cannot access property '{}' on non-object", key)));
+                    return Err(GreqError::ConditionFailed(format!("Cannot access property '{key}' on non-object")));
                 }
             },
             PathPart::Index(index) => {
                 if let Value::Array(arr) = current {
                     current = arr.get(index)
-                        .ok_or_else(|| GreqError::ConditionFailed(format!("Array index {} out of bounds", index)))?;
+                        .ok_or_else(|| GreqError::ConditionFailed(format!("Array index {index} out of bounds")))?;
                 } else {
-                    return Err(GreqError::ConditionFailed(format!("Cannot access index {} on non-array", index)));
+                    return Err(GreqError::ConditionFailed(format!("Cannot access index {index} on non-array")));
                 }
             },
         }
@@ -183,7 +180,7 @@ fn parse_json_path(path: &str) -> Result<Vec<PathPart>> {
                 }
                 
                 let mut index_str = String::new();
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     if ch == ']' {
                         break;
                     }
@@ -191,7 +188,7 @@ fn parse_json_path(path: &str) -> Result<Vec<PathPart>> {
                 }
                 
                 let index: usize = index_str.parse()
-                    .map_err(|_| GreqError::ConditionFailed(format!("Invalid array index: {}", index_str)))?;
+                    .map_err(|_| GreqError::ConditionFailed(format!("Invalid array index: {index_str}")))?;
                 parts.push(PathPart::Index(index));
             },
             _ => {
@@ -234,9 +231,9 @@ where
     F: Fn(f64, f64) -> bool,
 {
     let actual_num: f64 = actual.parse()
-        .map_err(|_| GreqError::ConditionFailed(format!("Cannot parse '{}' as number", actual)))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("Cannot parse '{actual}' as number")))?;
     let expected_num: f64 = expected.parse()
-        .map_err(|_| GreqError::ConditionFailed(format!("Cannot parse '{}' as number", expected)))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("Cannot parse '{expected}' as number")))?;
     
     Ok(op(actual_num, expected_num))
 }
@@ -259,7 +256,7 @@ fn compare_ends_with(actual: &str, expected: &str, case_sensitive: bool) -> bool
 
 fn compare_exists(actual: &str, expected: &str) -> Result<bool> {
     let expected_exists: bool = expected.parse()
-        .map_err(|_| GreqError::ConditionFailed(format!("Invalid boolean value for exists: {}", expected)))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("Invalid boolean value for exists: {expected}")))?;
     
     let actual_exists = !actual.is_empty();
     Ok(actual_exists == expected_exists)
@@ -298,8 +295,8 @@ fn format_condition_key(key: &ConditionKey) -> String {
         ConditionKey::Latency => "latency".to_string(),
         ConditionKey::ResponseBody => "response-body".to_string(),
         ConditionKey::Headers => "headers".to_string(),
-        ConditionKey::Header(name) => format!("headers.{}", name),
-        ConditionKey::ResponseBodyPath(path) => format!("response-body.{}", path),
+        ConditionKey::Header(name) => format!("headers.{name}"),
+        ConditionKey::ResponseBodyPath(path) => format!("response-body.{path}"),
     }
 }
 

@@ -12,13 +12,13 @@ use colored::*;
 /// Execute a single Greq file with dependency resolution
 pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<ExecutionResult> {
     let file_path = file_path.as_ref();
-    log::info!("Executing greq file: {:?}", file_path);
+    log::info!("Executing greq file: {file_path:?}");
     
     let mut greq_file = parse_greq_file(file_path)?;
     
     // Handle extends
     if let Some(extends_path) = &greq_file.header.extends.clone() {
-        log::info!("Loading base request from: {}", extends_path);
+        log::info!("Loading base request from: {extends_path}");
         let base_path = resolve_file_path(file_path, extends_path);
         let base_greq = parse_greq_file(&base_path)?;
         greq_file = merge_greq_files(&base_greq, &greq_file)?;
@@ -26,7 +26,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
     
     // Handle dependencies - execute dependency first if exists
     let dependency_response = if let Some(depends_on) = &greq_file.header.depends_on.clone() {
-        log::info!("Executing dependency: {}", depends_on);
+        log::info!("Executing dependency: {depends_on}");
         let dep_path = resolve_file_path(file_path, depends_on);
         
         // Load and execute dependency (without its own dependencies to avoid recursion)
@@ -60,7 +60,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     success: false,
                     response: None,
                     failed_conditions: Vec::new(),
-                    error: Some(format!("Dependency request failed: {}", e)),
+                    error: Some(format!("Dependency request failed: {e}")),
                 });
             }
         }
@@ -89,7 +89,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     failed_conditions.len()
                 );
                 for condition in &failed_conditions {
-                    log::warn!("  Failed: {}", condition);
+                    log::warn!("  Failed: {condition}");
                 }
             }
             
@@ -135,7 +135,7 @@ async fn execute_http_request(greq_file: &GreqFile) -> Result<Response> {
         "DELETE" => client.delete(&url),
         "PATCH" => client.patch(&url),
         "HEAD" => client.head(&url),
-        method => return Err(GreqError::Validation(format!("Unsupported HTTP method: {}", method))),
+        method => return Err(GreqError::Validation(format!("Unsupported HTTP method: {method}"))),
     };
     
     // Add headers (excluding host as it's used for URL construction)
@@ -228,7 +228,7 @@ pub async fn execute_multiple_greq_files<P: AsRef<Path>>(file_paths: &[P]) -> Re
     for handle in handles {
         match handle.await {
             Ok(result) => results.push(result?),
-            Err(e) => return Err(GreqError::Dependency(format!("Task join error: {}", e))),
+            Err(e) => return Err(GreqError::Dependency(format!("Task join error: {e}"))),
         }
     }
     
@@ -275,9 +275,9 @@ pub fn print_execution_results(results: &[ExecutionResult]) {
     
     // Summary
     let summary = if total_failed == 0 {
-        format!("All {} tests passed", total_success).green()
+        format!("All {total_success} tests passed").green()
     } else {
-        format!("{} passed, {} failed", total_success, total_failed).red()
+        format!("{total_success} passed, {total_failed} failed").red()
     };
     
     println!("{}: {}", "Summary".bold(), summary);
@@ -307,10 +307,10 @@ mod tests {
         
         // Debug: print the file content
         let written_content = fs::read_to_string(&file_path).unwrap();
-        println!("File content: {:?}", written_content);
+        println!("File content: {written_content:?}");
         
         let result = execute_greq_file(&file_path).await;
-        println!("Result: {:?}", result);
+        println!("Result: {result:?}");
         
         // For now, just check that we get some result
         assert!(result.is_ok() || result.is_err());

@@ -22,12 +22,12 @@ pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Resul
 
 /// Extract a value from response based on placeholder path
 fn extract_value_from_response(path: &str, response: &Response) -> Result<String> {
-    log::debug!("Extracting value for path: {}", path);
+    log::debug!("Extracting value for path: {path}");
     
     // Handle file-name-based paths like "04-create-user.response-body.json.user_id"
     let parts: Vec<&str> = path.split('.').collect();
     if parts.len() < 2 {
-        return Err(GreqError::Placeholder(format!("Invalid placeholder path: {}", path)));
+        return Err(GreqError::Placeholder(format!("Invalid placeholder path: {path}")));
     }
     
     // Skip the file name part and get the actual path
@@ -42,14 +42,13 @@ fn extract_value_from_response(path: &str, response: &Response) -> Result<String
         },
         "response-body" => Ok(response.body.clone()),
         _ => {
-            if actual_path.starts_with("headers.") {
-                let header_name = &actual_path[8..].to_lowercase();
+            if let Some(stripped) = actual_path.strip_prefix("headers.") {
+                let header_name = &stripped.to_lowercase();
                 Ok(response.headers.get(header_name).cloned().unwrap_or_default())
-            } else if actual_path.starts_with("response-body.") {
-                let json_path = &actual_path[14..];
+            } else if let Some(json_path) = actual_path.strip_prefix("response-body.") {
                 extract_json_path(&response.body, json_path)
             } else {
-                Err(GreqError::Placeholder(format!("Unknown placeholder path: {}", actual_path)))
+                Err(GreqError::Placeholder(format!("Unknown placeholder path: {actual_path}")))
             }
         }
     }
@@ -81,17 +80,17 @@ fn navigate_json_path(value: &Value, path: &str) -> Result<Value> {
             PathPart::Property(key) => {
                 if let Value::Object(obj) = current {
                     current = obj.get(&key)
-                        .ok_or_else(|| GreqError::Placeholder(format!("Property '{}' not found", key)))?;
+                        .ok_or_else(|| GreqError::Placeholder(format!("Property '{key}' not found")))?;
                 } else {
-                    return Err(GreqError::Placeholder(format!("Cannot access property '{}' on non-object", key)));
+                    return Err(GreqError::Placeholder(format!("Cannot access property '{key}' on non-object")));
                 }
             },
             PathPart::Index(index) => {
                 if let Value::Array(arr) = current {
                     current = arr.get(index)
-                        .ok_or_else(|| GreqError::Placeholder(format!("Array index {} out of bounds", index)))?;
+                        .ok_or_else(|| GreqError::Placeholder(format!("Array index {index} out of bounds")))?;
                 } else {
-                    return Err(GreqError::Placeholder(format!("Cannot access index {} on non-array", index)));
+                    return Err(GreqError::Placeholder(format!("Cannot access index {index} on non-array")));
                 }
             },
         }
@@ -129,7 +128,7 @@ fn parse_json_path(path: &str) -> Result<Vec<PathPart>> {
                 
                 // Parse array index
                 let mut index_str = String::new();
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     if ch == ']' {
                         break;
                     }
@@ -137,7 +136,7 @@ fn parse_json_path(path: &str) -> Result<Vec<PathPart>> {
                 }
                 
                 let index: usize = index_str.parse()
-                    .map_err(|_| GreqError::Placeholder(format!("Invalid array index: {}", index_str)))?;
+                    .map_err(|_| GreqError::Placeholder(format!("Invalid array index: {index_str}")))?;
                 parts.push(PathPart::Index(index));
             },
             _ => {
@@ -205,7 +204,7 @@ mod tests {
     #[test]
     fn test_replace_status_code_placeholder() {
         let response = create_test_response();
-        let text = "Status: $(dependency.status-code)";
+        let text = "Status: {{dependency.status-code}}";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "Status: 200");
     }
@@ -213,7 +212,7 @@ mod tests {
     #[test]
     fn test_replace_header_placeholder() {
         let response = create_test_response();
-        let text = "Type: $(dependency.headers.content-type)";
+        let text = "Type: {{dependency.headers.content-type}}";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "Type: application/json");
     }
@@ -221,7 +220,7 @@ mod tests {
     #[test]
     fn test_replace_json_path_placeholder() {
         let response = create_test_response();
-        let text = "ID: $(dependency.response-body.id)";
+        let text = "ID: {{dependency.response-body.id}}";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "ID: 123");
     }
@@ -229,7 +228,7 @@ mod tests {
     #[test]
     fn test_replace_json_array_placeholder() {
         let response = create_test_response();
-        let text = "First item: $(dependency.response-body.items[0].id)";
+        let text = "First item: {{dependency.response-body.items[0].id}}";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "First item: 1");
     }

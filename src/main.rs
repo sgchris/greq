@@ -24,7 +24,7 @@ async fn main() {
     
     // Initialize logger
     if let Err(e) = logger::init_logger() {
-        eprintln!("Failed to initialize logger: {}", e);
+        eprintln!("Failed to initialize logger: {e}");
         process::exit(1);
     }
     
@@ -43,7 +43,7 @@ async fn main() {
             process::exit(1);
         }
         
-        if !file_path.extension().map_or(false, |ext| ext == "greq") {
+        if file_path.extension().is_none_or(|ext| ext != "greq") {
             eprintln!("{} File must have .greq extension: {}", "⚠".yellow(), file_path.display());
         }
     }

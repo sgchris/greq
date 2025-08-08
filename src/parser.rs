@@ -9,7 +9,7 @@ use regex::Regex;
 /// Parse a .greq file into a GreqFile structure
 pub fn parse_greq_file<P: AsRef<Path>>(file_path: P) -> Result<GreqFile> {
     let file_path = file_path.as_ref();
-    log::debug!("Parsing greq file: {:?}", file_path);
+    log::debug!("Parsing greq file: {file_path:?}");
     
     let content = fs::read_to_string(file_path)
         .map_err(|_| GreqError::FileNotFound(file_path.display().to_string()))?;
@@ -58,7 +58,7 @@ fn split_into_sections(content: &str, delimiter: &str) -> Result<Vec<String>> {
     
     log::debug!("Split content into {} sections using pattern '{}'", sections.len(), delimiter_pattern);
     for (i, section) in sections.iter().enumerate() {
-        log::debug!("Section {}: {:?}", i, section);
+        log::debug!("Section {i}: {section:?}");
     }
     
     if sections.len() < 2 {
@@ -90,14 +90,14 @@ fn parse_header(header_text: &str) -> Result<Header> {
                 "delimiter" => header.delimiter = value.to_string(),
                 "extends" => header.extends = Some(value.to_string()),
                 "number-of-retries" => header.number_of_retries = value.parse()
-                    .map_err(|_| GreqError::Parse(format!("Invalid number-of-retries: {}", value)))?,
+                    .map_err(|_| GreqError::Parse(format!("Invalid number-of-retries: {value}")))?,
                 "depends-on" => header.depends_on = Some(value.to_string()),
                 "timeout" => {
                     let timeout_ms: u64 = value.parse()
-                        .map_err(|_| GreqError::Parse(format!("Invalid timeout: {}", value)))?;
+                        .map_err(|_| GreqError::Parse(format!("Invalid timeout: {value}")))?;
                     header.timeout = Some(Duration::from_millis(timeout_ms));
                 },
-                _ => log::warn!("Unknown header property: {}", key),
+                _ => log::warn!("Unknown header property: {key}"),
             }
         }
     }
@@ -137,7 +137,7 @@ fn parse_content(content_text: &str) -> Result<Content> {
     
     // Parse body
     let body = if body_start < lines.len() {
-        let body_lines: Vec<&str> = lines[body_start..].iter().cloned().collect();
+        let body_lines: Vec<&str> = lines[body_start..].to_vec();
         if body_lines.iter().any(|line| !line.trim().is_empty()) {
             Some(body_lines.join("\n"))
         } else {
@@ -159,7 +159,7 @@ fn parse_request_line(line: &str) -> Result<RequestLine> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     
     if parts.len() < 3 {
-        return Err(GreqError::Parse(format!("Invalid request line: {}", line)));
+        return Err(GreqError::Parse(format!("Invalid request line: {line}")));
     }
     
     Ok(RequestLine {
@@ -206,12 +206,12 @@ fn parse_condition(line: &str) -> Result<Condition> {
     }
     
     if parts.len() < 3 {
-        return Err(GreqError::Parse(format!("Invalid condition format: {}", line)));
+        return Err(GreqError::Parse(format!("Invalid condition format: {line}")));
     }
     
     // Find colon to separate operator from value
     let colon_pos = line.rfind(':')
-        .ok_or_else(|| GreqError::Parse(format!("Missing colon in condition: {}", line)))?;
+        .ok_or_else(|| GreqError::Parse(format!("Missing colon in condition: {line}")))?;
     
     let before_colon = &line[..colon_pos];
     let value = line[colon_pos + 1..].trim().to_string();
@@ -227,7 +227,7 @@ fn parse_condition(line: &str) -> Result<Condition> {
         .collect();
     
     if key_and_op.len() < 2 {
-        return Err(GreqError::Parse(format!("Invalid condition format: {}", line)));
+        return Err(GreqError::Parse(format!("Invalid condition format: {line}")));
     }
     
     let key = parse_condition_key(key_and_op[0])?;
@@ -253,14 +253,14 @@ fn parse_condition_key(key_str: &str) -> Result<ConditionKey> {
         Ok(ConditionKey::ResponseBody)
     } else if key_str == "headers" {
         Ok(ConditionKey::Headers)
-    } else if key_str.starts_with("headers.") {
-        let header_name = key_str[8..].to_string();
+    } else if let Some(stripped) = key_str.strip_prefix("headers.") {
+        let header_name = stripped.to_string();
         Ok(ConditionKey::Header(header_name))
-    } else if key_str.starts_with("response-body.") {
-        let path = key_str[14..].to_string();
+    } else if let Some(stripped) = key_str.strip_prefix("response-body.") {
+        let path = stripped.to_string();
         Ok(ConditionKey::ResponseBodyPath(path))
     } else {
-        Err(GreqError::Parse(format!("Unknown condition key: {}", key_str)))
+        Err(GreqError::Parse(format!("Unknown condition key: {key_str}")))
     }
 }
 
@@ -277,7 +277,7 @@ fn parse_operator(op_str: &str) -> Result<Operator> {
         "starts-with" => Ok(Operator::StartsWith),
         "ends-with" => Ok(Operator::EndsWith),
         "exists" => Ok(Operator::Exists),
-        _ => Err(GreqError::Parse(format!("Unknown operator: {}", op_str))),
+        _ => Err(GreqError::Parse(format!("Unknown operator: {op_str}"))),
     }
 }
 
@@ -286,7 +286,7 @@ fn parse_bool(value: &str) -> Result<bool> {
     match value.to_lowercase().as_str() {
         "true" | "yes" | "1" => Ok(true),
         "false" | "no" | "0" => Ok(false),
-        _ => Err(GreqError::Parse(format!("Invalid boolean value: {}", value))),
+        _ => Err(GreqError::Parse(format!("Invalid boolean value: {value}"))),
     }
 }
 
@@ -347,7 +347,7 @@ pub fn resolve_file_path<P: AsRef<Path>>(current_file: P, referenced_file: &str)
     let file_name = if referenced_file.ends_with(".greq") {
         referenced_file.to_string()
     } else {
-        format!("{}.greq", referenced_file)
+        format!("{referenced_file}.greq")
     };
     
     if Path::new(&file_name).is_absolute() {
