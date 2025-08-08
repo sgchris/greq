@@ -1,16 +1,15 @@
 # Greq 🚀
 
-A robust web API testing tool with inheritance, dependencies, and dynamic request support built in Rust.
+`greq` is a Rust-based command-line tool for parsing, validating, and executing HTTP-like requests from `.greq` files. Ideal for developers working with raw HTTP interactions.
 
-## Overview
+## 🚀 Features
 
-Greq processes test definitions from `.greq` files, enabling you to create sophisticated HTTP API test suites with features like:
-
-- **Inheritance**: Extend base configurations across multiple test files
-- **Dependencies**: Execute tests in sequence with data flow between them
-- **Dynamic Placeholders**: Extract and reuse values from responses
-- **Parallel Execution**: Run multiple independent tests simultaneously
-- **Rich Conditions**: Comprehensive response validation with multiple operators
+- Parse `.greq` request files with structured metadata, body, and evaluation conditions
+- Run requests and validate responses
+- Supports inheritance, templating, placeholders, and chain of dependencies.
+- Works with JSON, status codes, etc.
+- Built for performance and flexibility
+- Process requests simultaneously
 
 ## Quick Start
 
@@ -60,31 +59,11 @@ response-body.json.id exists: true
 response-body.json.name equals: John Doe
 ```
 
-## Features
-
-- 🔗 **File Inheritance**: Share common configurations with `extends`
-- 📦 **Dependencies**: Chain tests together with `depends-on`
-- 🔄 **Dynamic Values**: Extract and reuse response data with placeholders
-- ⚡ **Parallel Execution**: Automatic parallel processing of independent tests
-- 📊 **Rich Validation**: Status codes, headers, JSON paths, response times
-- 📝 **Detailed Logging**: Comprehensive logging with configurable verbosity
-- 🎯 **Zero Configuration**: Works out of the box with sensible defaults
-
 ## Documentation
 
 For complete documentation including all properties, operators, and advanced features, see:
 
 📖 **[Complete Documentation](docs/documentation.md)**
-
-## Project Structure
-
-```
-greq/
-├── src/           # Core application code
-├── greq-examples/ # Example test files
-├── docs/          # Comprehensive documentation
-└── target/        # Build artifacts
-```
 
 ## Examples
 
@@ -98,6 +77,7 @@ The `greq-examples/` directory contains various example files demonstrating diff
 ## Contributing
 
 This project follows idiomatic Rust patterns and coding standards. Please ensure all code:
+Please check [CONTRIBUTING](CONTRIBUTING.md) instructions.
 
 - Compiles without warnings (`cargo clippy`)
 - Is properly formatted (`cargo fmt`)
@@ -106,4 +86,4 @@ This project follows idiomatic Rust patterns and coding standards. Please ensure
 
 ## License
 
-This project is open source. See LICENSE file for details.
+See [LICENSE](LICENSE) file for details.
