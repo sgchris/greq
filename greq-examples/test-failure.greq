@@ -1,0 +1,12 @@
+project: test-failure-demo
+is-http: true
+
+====
+
+GET /uuid HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code less-than-or-equal: 150
+response-body contains: some-nonexistent-string

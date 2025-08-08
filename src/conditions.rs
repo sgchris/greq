@@ -9,8 +9,7 @@ pub fn evaluate_conditions(conditions: &[Condition], response: &Response) -> Res
     let condition_groups = group_conditions(conditions);
     
     for group in condition_groups {
-        if !evaluate_condition_group(&group, response)? {
-            let failed_desc = format_failed_conditions(&group);
+        if let Some(failed_desc) = evaluate_condition_group_with_details(&group, response)? {
             failed_conditions.push(failed_desc);
         }
     }
@@ -41,18 +40,31 @@ fn group_conditions(conditions: &[Condition]) -> Vec<Vec<&Condition>> {
     groups
 }
 
-/// Evaluate a group of conditions (connected by OR)
-fn evaluate_condition_group(group: &[&Condition], response: &Response) -> Result<bool> {
+/// Evaluate a group of conditions (connected by OR) and return failure details if any
+fn evaluate_condition_group_with_details(group: &[&Condition], response: &Response) -> Result<Option<String>> {
+    let mut failed_details = Vec::new();
+    
     for condition in group {
-        if evaluate_single_condition(condition, response)? {
-            return Ok(true);
+        match evaluate_single_condition_with_details(condition, response)? {
+            ConditionResult::Passed => return Ok(None), // If any condition passes in OR group, group passes
+            ConditionResult::Failed { actual_value, condition } => {
+                failed_details.push(format_failed_condition_with_actual(&condition, &actual_value));
+            }
         }
     }
-    Ok(false)
+    
+    // All conditions failed, format them
+    Ok(Some(failed_details.join(" OR ")))
 }
 
-/// Evaluate a single condition
-fn evaluate_single_condition(condition: &Condition, response: &Response) -> Result<bool> {
+#[derive(Debug)]
+enum ConditionResult {
+    Passed,
+    Failed { actual_value: String, condition: Condition },
+}
+
+/// Evaluate a single condition with detailed results
+fn evaluate_single_condition_with_details(condition: &Condition, response: &Response) -> Result<ConditionResult> {
     let actual_value = extract_condition_value(&condition.key, response)?;
     let expected_value = &condition.value;
     
@@ -83,7 +95,14 @@ fn evaluate_single_condition(condition: &Condition, response: &Response) -> Resu
         "Condition result: {final_result} (actual: '{actual_value}', expected: '{expected_value}')"
     );
     
-    Ok(final_result)
+    if final_result {
+        Ok(ConditionResult::Passed)
+    } else {
+        Ok(ConditionResult::Failed { 
+            actual_value, 
+            condition: condition.clone(),
+        })
+    }
 }
 
 /// Extract the actual value for a condition key from the response
@@ -263,14 +282,7 @@ fn compare_exists(actual: &str, expected: &str) -> Result<bool> {
 }
 
 // Formatting functions for error messages
-fn format_failed_conditions(conditions: &[&Condition]) -> String {
-    conditions.iter()
-        .map(|c| format_condition(c))
-        .collect::<Vec<_>>()
-        .join(" OR ")
-}
-
-fn format_condition(condition: &Condition) -> String {
+fn format_failed_condition_with_actual(condition: &Condition, actual_value: &str) -> String {
     let mut parts = Vec::new();
     
     if condition.is_not {
@@ -285,6 +297,7 @@ fn format_condition(condition: &Condition) -> String {
     }
     
     parts.push(format!("'{}'", condition.value));
+    parts.push(format!("(actual: '{}')", actual_value));
     
     parts.join(" ")
 }
@@ -321,6 +334,14 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
     
+    // Helper function for tests to get just the boolean result
+    fn evaluate_single_condition_test(condition: &Condition, response: &Response) -> Result<bool> {
+        match evaluate_single_condition_with_details(condition, response)? {
+            ConditionResult::Passed => Ok(true),
+            ConditionResult::Failed { .. } => Ok(false),
+        }
+    }
+    
     fn create_test_response() -> Response {
         let mut headers = HashMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
@@ -345,7 +366,7 @@ mod tests {
             value: "200".to_string(),
         };
         
-        let result = evaluate_single_condition(&condition, &response).unwrap();
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
         assert!(result);
     }
     
@@ -361,7 +382,7 @@ mod tests {
             value: "test".to_string(),
         };
         
-        let result = evaluate_single_condition(&condition, &response).unwrap();
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
         assert!(result);
     }
     
@@ -377,7 +398,7 @@ mod tests {
             value: "123".to_string(),
         };
         
-        let result = evaluate_single_condition(&condition, &response).unwrap();
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
         assert!(result);
     }
     
@@ -393,7 +414,7 @@ mod tests {
             value: "404".to_string(),
         };
         
-        let result = evaluate_single_condition(&condition, &response).unwrap();
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
         assert!(result); // NOT 404 should be true for 200
     }
 }
