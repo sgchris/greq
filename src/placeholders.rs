@@ -3,8 +3,9 @@ use crate::error::{GreqError, Result};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::env;
 
-/// Replace placeholders in a string with values from dependency response
+/// Replace placeholders in a string with values from dependency response or environment variables
 pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Result<String> {
     let placeholder_regex = Regex::new(r"\$\(([\w\.\-\[\]]+)\)")?;
     let mut result = text.to_string();
@@ -13,11 +14,31 @@ pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Resul
         let full_match = &capture[0];
         let placeholder_path = &capture[1];
         
-        let value = extract_value_from_response(placeholder_path, dependency_response)?;
+        let value = if placeholder_path.starts_with("environment.") {
+            extract_environment_variable(placeholder_path)?
+        } else {
+            extract_value_from_response(placeholder_path, dependency_response)?
+        };
+        
         result = result.replace(full_match, &value);
     }
     
     Ok(result)
+}
+
+/// Extract environment variable value from placeholder path
+fn extract_environment_variable(path: &str) -> Result<String> {
+    let env_var_name = path.strip_prefix("environment.")
+        .ok_or_else(|| GreqError::Placeholder(format!("Invalid environment placeholder: {path}")))?;
+    
+    if env_var_name.is_empty() {
+        return Err(GreqError::Placeholder("Environment variable name cannot be empty".to_string()));
+    }
+    
+    log::debug!("Extracting environment variable: {env_var_name}");
+    
+    env::var(env_var_name)
+        .map_err(|_| GreqError::Placeholder(format!("Environment variable '{env_var_name}' not found")))
 }
 
 /// Extract a value from response based on placeholder path
@@ -168,28 +189,46 @@ pub fn replace_placeholders_in_greq_file(
     greq_file: &mut crate::models::GreqFile,
     dependency_response: &Response,
 ) -> Result<()> {
+    replace_placeholders_in_greq_file_with_optional_response(greq_file, Some(dependency_response))
+}
+
+/// Replace placeholders in all text fields of a GreqFile, with optional dependency response
+pub fn replace_placeholders_in_greq_file_with_optional_response(
+    greq_file: &mut crate::models::GreqFile,
+    dependency_response: Option<&Response>,
+) -> Result<()> {
+    // Create a dummy response if none provided (for environment-only placeholders)
+    let dummy_response = Response {
+        status_code: 200,
+        headers: HashMap::new(),
+        body: "{}".to_string(),
+        latency: std::time::Duration::from_millis(0),
+    };
+    
+    let response = dependency_response.unwrap_or(&dummy_response);
+    
     // Replace in URI
     greq_file.content.request_line.uri = replace_placeholders(
         &greq_file.content.request_line.uri,
-        dependency_response,
+        response,
     )?;
     
     // Replace in headers
     let mut updated_headers = HashMap::new();
     for (key, value) in &greq_file.content.headers {
-        let updated_value = replace_placeholders(value, dependency_response)?;
+        let updated_value = replace_placeholders(value, response)?;
         updated_headers.insert(key.clone(), updated_value);
     }
     greq_file.content.headers = updated_headers;
     
     // Replace in body
     if let Some(body) = &greq_file.content.body {
-        greq_file.content.body = Some(replace_placeholders(body, dependency_response)?);
+        greq_file.content.body = Some(replace_placeholders(body, response)?);
     }
     
     // Replace in condition values
     for condition in &mut greq_file.footer.conditions {
-        condition.value = replace_placeholders(&condition.value, dependency_response)?;
+        condition.value = replace_placeholders(&condition.value, response)?;
     }
     
     Ok(())
@@ -242,6 +281,73 @@ mod tests {
         let text = "First item: $(dependency.response-body.items[0].id)";
         let result = replace_placeholders(text, &response).unwrap();
         assert_eq!(result, "First item: 1");
+    }
+    
+    #[test]
+    fn test_replace_environment_variable_placeholder() {
+        let response = create_test_response();
+        
+        // Set a test environment variable
+        env::set_var("TEST_VAR", "test_value");
+        
+        let text = "API Key: $(environment.TEST_VAR)";
+        let result = replace_placeholders(text, &response).unwrap();
+        assert_eq!(result, "API Key: test_value");
+        
+        // Clean up
+        env::remove_var("TEST_VAR");
+    }
+    
+    #[test]
+    fn test_replace_environment_variable_with_underscores() {
+        let response = create_test_response();
+        
+        // Set a test environment variable with underscores
+        env::set_var("MY_API_KEY", "secret123");
+        
+        let text = "Token: $(environment.MY_API_KEY)";
+        let result = replace_placeholders(text, &response).unwrap();
+        assert_eq!(result, "Token: secret123");
+        
+        // Clean up
+        env::remove_var("MY_API_KEY");
+    }
+    
+    #[test]
+    fn test_replace_nonexistent_environment_variable() {
+        let response = create_test_response();
+        
+        let text = "Value: $(environment.NONEXISTENT_VAR)";
+        let result = replace_placeholders(text, &response);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Environment variable 'NONEXISTENT_VAR' not found"));
+    }
+    
+    #[test]
+    fn test_replace_empty_environment_variable_name() {
+        let response = create_test_response();
+        
+        let text = "Value: $(environment.)";
+        let result = replace_placeholders(text, &response);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Environment variable name cannot be empty"));
+    }
+    
+    #[test]
+    fn test_replace_mixed_placeholders() {
+        let response = create_test_response();
+        
+        // Set a test environment variable
+        env::set_var("TEST_HOST", "api.example.com");
+        
+        let text = "URL: https://$(environment.TEST_HOST)/users/$(dependency.response-body.id)";
+        let result = replace_placeholders(text, &response).unwrap();
+        assert_eq!(result, "URL: https://api.example.com/users/123");
+        
+        // Clean up
+        env::remove_var("TEST_HOST");
     }
     
     #[test]

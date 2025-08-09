@@ -246,14 +246,15 @@ status-code equals: 200
 
 ## Placeholders
 
-Extract and reuse values from dependency responses using placeholder syntax:
+Extract and reuse values from dependency responses and environment variables using placeholder syntax:
 
-### Placeholder Format
+### Placeholder Formats
 ```
-$(dependency.property-name)
+$(dependency.property-name)      # Dependency response values
+$(environment.variable-name)     # Environment variables
 ```
 
-### Available Properties
+### Dependency Properties
 
 | Property | Description | Example |
 |----------|-------------|---------|
@@ -262,11 +263,30 @@ $(dependency.property-name)
 | `headers.name` | Response header | `$(dependency.headers.set-cookie)` |
 | `response-body.<path>` | JSON path | `$(dependency.response-body.user.id)` |
 
+### Environment Variables
+
+Access environment variables using the `$(environment.variable-name)` syntax:
+
+```greq
+# Use environment variables
+authorization: Bearer $(environment.api-token)
+host: $(environment.api-host)
+
+# In request body
+{
+  "api_key": "$(environment.api-key)",
+  "version": "$(environment.app-version)"
+}
+```
+
 ### Placeholder Examples
 
 ```greq
 # Use status code
 GET /status/$(dependency.status-code) HTTP/1.1
+
+# Use environment variables
+authorization: Bearer $(environment.api-token)
 
 # Use response header
 authorization: $(dependency.headers.authorization)
@@ -405,6 +425,59 @@ response-body contains: json
 not response-body contains: error
 latency less-than: 5000
 headers contains: content-type
+```
+
+### Environment Variables Examples
+
+**Development Environment Test:**
+```greq
+project: Environment API Test
+is-http: true
+
+====
+
+GET /api/v1/users HTTP/1.1
+host: $(environment.api-host)
+authorization: Bearer $(environment.api-token)
+x-client-version: $(environment.app-version)
+
+====
+
+status-code equals: 200
+response-body.json.status equals: success
+```
+
+**POST with Environment Variables:**
+```greq
+project: Create Resource
+is-http: true
+
+====
+
+POST /api/resources HTTP/1.1
+host: $(environment.api-host)
+authorization: Bearer $(environment.api-token)
+content-type: application/json
+
+{
+  "name": "test-resource",
+  "environment": "$(environment.deploy-env)",
+  "api_key": "$(environment.service-key)"
+}
+
+====
+
+status-code equals: 201
+response-body.json.id exists: true
+```
+
+To run these tests, set the required environment variables:
+```powershell
+$env:API_HOST = "api.example.com"
+$env:API_TOKEN = "your-token-here"
+$env:APP_VERSION = "1.0.0"
+$env:DEPLOY_ENV = "development"
+$env:SERVICE_KEY = "service-secret"
 ```
 
 ### Inheritance Example

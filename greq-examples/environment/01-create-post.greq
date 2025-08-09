@@ -1,0 +1,21 @@
+project: environment-base-request
+is-http: true
+
+====
+
+POST /posts HTTP/1.1
+host: $(environment.API_HOST)
+content-type: application/json
+x-api-key: $(environment.API_KEY)
+
+{
+  "title": "Test Post from $(environment.USER_NAME)",
+  "body": "This is a test post created using environment variables",
+  "userId": $(environment.USER_ID)
+}
+
+====
+
+status-code equals: 201
+response-body contains: "Test Post from"
+response-body contains: id

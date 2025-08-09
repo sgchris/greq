@@ -1,0 +1,14 @@
+project: environment-variables-test
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: $(environment.TEST_HOST)
+authorization: Bearer $(environment.API_TOKEN)
+user-agent: Greq/1.0
+
+====
+
+status-code equals: 200
+response-body contains: "$(environment.TEST_HOST)"

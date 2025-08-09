@@ -1,0 +1,16 @@
+project: environment-with-dependency
+depends-on: 01-create-post.greq
+is-http: true
+
+====
+
+GET /posts/$(dependency.response-body.id) HTTP/1.1
+host: $(environment.API_HOST)
+x-api-key: $(environment.API_KEY)
+x-user: $(environment.USER_NAME)
+
+====
+
+status-code equals: 200
+response-body contains: $(dependency.response-body.id)
+response-body contains: "Test Post from"
