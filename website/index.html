@@ -131,40 +131,58 @@
 
 			<section id="examples">
 				<div class="container">
-					<h2>Examples</h2>
+					<h2>Example</h2>
 					<div class="grid">
 						<div class="card">
-							<h3>Simple GET</h3>
-							<pre class="code">project: simple-get
-is-http: true
+							<h3>Create a resource</h3>
+                            <p>Use request template and depend the creation on deleting the resource first</p>
+							<pre class="code">
+project: test resource creation
+
+-- load additional properties from the template
+extends: resources-api-template
+
+-- delete the resource before the test
+depends-on: delete-resource
+number-of-retries: 2
 
 ====
 
-GET /status/200 HTTP/1.1
-host: httpbin.org
+POST /resources/my-resource
+host: example.com
+
+{"name":"My awesome resource", "description":"A resource for testing"}
 
 ====
 
-status-code equals: 200</pre>
+-- evaluate the response
+status-code equals: 200
+response-body contains: "Resource created successfully"
+
+</pre>
 						</div>
 						<div class="card">
 							<h3>Dependency with placeholders</h3>
-							<pre class="code">project: user-by-id
-depends-on: 01-create-user.greq
-is-http: true
+							<pre class="code">
+project: test resource creation
+
+-- Create the resource first and use its response with placeholders
+depends-on: create-resource
 
 ====
 
 GET /users/$(dependency.response-body.id) HTTP/1.1
-host: example.org
+host: example.com
 
 ====
 
+-- evaluate the response
 status-code equals: 200
-response-body contains: $(dependency.response-body.id)</pre>
+response-body contains: $(dependency.response-body.id)
+                            </pre>
 						</div>
 					</div>
-					<p class="muted">See more in <a href="https://github.com/sgchris/greq/tree/main2/greq-examples" target="_blank" rel="noopener">greq-examples</a>.</p>
+					<p class="muted">See more in <a href="https://github.com/sgchris/greq/tree/main/greq-examples" target="_blank" rel="noopener">greq-examples</a>.</p>
 				</div>
 			</section>
 

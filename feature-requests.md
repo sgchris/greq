@@ -19,3 +19,24 @@
 5. Add support for parameters files
     - Allow several parameters file for the same Greq file to be executed one by one
     - Add variable to distinguish between the parameter files, like `$(parameters.hostname)`
+
+6. Performance and load tests
+    Example:
+    ```yaml
+    project: User Registration Load Test
+    performance-mode: true
+    concurrent-users: 50
+    ramp-up-time: 30s
+    test-duration: 5m
+
+    ====
+    POST /api/users HTTP/1.1
+    # ... request details
+    ====
+
+    latency percentile-95 less-than: 500
+    throughput greater-than: 100
+    error-rate less-than: 1%
+    ```
+
+7. Scheduling and repeat. Add property like `repeat-every: 5 minutes`, `repeat-every: 15 seconds`, `repeat-every: 150 milliseconds`
