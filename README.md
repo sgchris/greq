@@ -2,7 +2,7 @@
 
 A tester tool for APIs with templates and dependencies.
 
-As easy as:
+Example:
 ```yaml
 project: test my awesome API
 
