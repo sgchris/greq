@@ -34,6 +34,7 @@ response-body contains: id
 - Run requests and validate responses
 - Supports inheritance, templating, placeholders, and chain of dependencies
 - Environment variable placeholders with `$(environment.VAR_NAME)` syntax
+- Allow dependency failure handling with `allow-dependency-failure` property
 - Works with JSON, status codes, etc.
 - Built for performance and flexibility
 - Process requests simultaneously
@@ -99,6 +100,7 @@ The `greq-examples/` directory contains various example files demonstrating diff
 - **Basic tests**: Simple GET/POST requests
 - **Inheritance**: Using base configurations
 - **Dependencies**: Chaining tests with data flow
+- **Dependency failure handling**: Using `allow-dependency-failure` for robust test workflows
 - **Environment variables**: Using environment variable placeholders
 - **Advanced conditions**: Complex validation scenarios
 

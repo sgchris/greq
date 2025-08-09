@@ -97,12 +97,28 @@ fn parse_header(header_text: &str) -> Result<Header> {
                         .map_err(|_| GreqError::Parse(format!("Invalid timeout: {value}")))?;
                     header.timeout = Some(Duration::from_millis(timeout_ms));
                 },
+                "allow-dependency-failure" => header.allow_dependency_failure = parse_bool(value)?,
                 _ => log::warn!("Unknown header property: {key}"),
             }
         }
     }
     
+    // Validate header properties
+    validate_header(&header)?;
+    
     Ok(header)
+}
+
+/// Validate header properties for consistency
+fn validate_header(header: &Header) -> Result<()> {
+    // Validate that allow-dependency-failure is only used with depends-on
+    if header.allow_dependency_failure && header.depends_on.is_none() {
+        return Err(GreqError::Validation(
+            "allow-dependency-failure can only be used when depends-on is defined".to_string()
+        ));
+    }
+    
+    Ok(())
 }
 
 /// Parse the content section (HTTP request)
@@ -450,5 +466,59 @@ timeout: 5000
         assert!(matches!(condition.operator, Operator::Contains));
         assert!(condition.case_sensitive);
         assert_eq!(condition.value, "Success");
+    }
+
+    #[test]
+    fn test_parse_header_with_allow_dependency_failure() {
+        let header_text = r#"
+project: test project
+depends-on: auth.greq
+allow-dependency-failure: true
+"#;
+        
+        let header = parse_header(header_text).unwrap();
+        assert_eq!(header.project, Some("test project".to_string()));
+        assert_eq!(header.depends_on, Some("auth.greq".to_string()));
+        assert_eq!(header.allow_dependency_failure, true);
+    }
+    
+    #[test]
+    fn test_validate_header_allow_dependency_failure_without_depends_on() {
+        let header = Header {
+            project: Some("test".to_string()),
+            allow_dependency_failure: true,
+            depends_on: None,
+            ..Header::default()
+        };
+        
+        let result = validate_header(&header);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("allow-dependency-failure can only be used when depends-on is defined"));
+    }
+    
+    #[test]
+    fn test_validate_header_allow_dependency_failure_with_depends_on() {
+        let header = Header {
+            project: Some("test".to_string()),
+            allow_dependency_failure: true,
+            depends_on: Some("auth.greq".to_string()),
+            ..Header::default()
+        };
+        
+        let result = validate_header(&header);
+        assert!(result.is_ok());
+    }
+    
+    #[test]
+    fn test_validate_header_without_allow_dependency_failure() {
+        let header = Header {
+            project: Some("test".to_string()),
+            allow_dependency_failure: false,
+            depends_on: None,
+            ..Header::default()
+        };
+        
+        let result = validate_header(&header);
+        assert!(result.is_ok());
     }
 }

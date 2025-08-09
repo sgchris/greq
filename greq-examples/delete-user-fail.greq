@@ -1,0 +1,11 @@
+project: Delete User (Expected to Fail)
+is-http: true
+
+====
+
+DELETE /users/9999 HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

@@ -20,6 +20,7 @@ pub struct Header {
     pub number_of_retries: u32,
     pub depends_on: Option<String>,
     pub timeout: Option<Duration>,
+    pub allow_dependency_failure: bool,
 }
 
 /// Content section representing the HTTP request
@@ -110,6 +111,7 @@ impl Default for Header {
             number_of_retries: 0,
             depends_on: None,
             timeout: None,
+            allow_dependency_failure: false,
         }
     }
 }

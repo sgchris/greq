@@ -1,0 +1,19 @@
+project: Test WITHOUT Dependency Failure Allowed
+depends-on: cleanup-resource.greq
+is-http: true
+
+====
+
+POST /post HTTP/1.1
+host: httpbin.org
+content-type: application/json
+
+{
+  "action": "create_without_allow",
+  "description": "This should fail when cleanup fails"
+}
+
+====
+
+status-code equals: 200
+response-body contains: create_without_allow

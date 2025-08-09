@@ -48,6 +48,7 @@ condition: value
 | `delimiter` | Section separator character | `delimiter: $` | `=` |
 | `extends` | Base file to inherit from | `extends: base-config.greq` | None |
 | `depends-on` | File to execute first | `depends-on: auth-setup.greq` | None |
+| `allow-dependency-failure` | Continue if dependency fails | `allow-dependency-failure: true` | `false` |
 | `timeout` | Request timeout in milliseconds | `timeout: 5000` | `30000` |
 | `number-of-retries` | Retry attempts on failure | `number-of-retries: 3` | `0` |
 
@@ -58,6 +59,9 @@ Inherits configuration from another `.greq` file. The base file's header and con
 
 #### `depends-on`
 Executes another test file before this one and makes its response available for placeholder replacement. Can reference files with or without `.greq` extension.
+
+#### `allow-dependency-failure`
+When set to `true`, allows the current test to continue executing even if the dependency defined by `depends-on` fails. This property can only be used when `depends-on` is also defined. Useful for scenarios like cleanup operations that may fail if the resource doesn't exist.
 
 #### `timeout`
 Maximum time to wait for a response in milliseconds. Requests exceeding this time will fail.
@@ -242,6 +246,67 @@ authorization: Bearer $(dependency.response-body.token)
 ====
 
 status-code equals: 200
+```
+
+## Dependency Failure Handling
+
+By default, if a dependency test fails (either through HTTP errors or failed conditions), the dependent test will also fail. However, you can use `allow-dependency-failure: true` to continue execution even when dependencies fail.
+
+### Use Cases
+
+Common scenarios where you might want to allow dependency failures:
+
+1. **Cleanup operations**: Deleting resources that may or may not exist
+2. **Optional setup**: Setup steps that aren't critical for the main test
+3. **Retry scenarios**: Tests that attempt to clean up before creating
+
+### Example: Delete Before Create
+
+**cleanup.greq:**
+```greq
+project: Delete User (May Fail)
+is-http: true
+
+====
+
+DELETE /users/123 HTTP/1.1
+host: api.example.com
+authorization: Bearer $(environment.api-token)
+
+====
+
+status-code equals: 204
+```
+
+**create-user.greq:**
+```greq
+project: Create User After Cleanup
+depends-on: cleanup.greq
+allow-dependency-failure: true
+is-http: true
+
+====
+
+POST /users HTTP/1.1
+host: api.example.com
+authorization: Bearer $(environment.api-token)
+content-type: application/json
+
+{
+  "id": 123,
+  "name": "John Doe"
+}
+
+====
+
+status-code equals: 201
+```
+
+In this example, if the DELETE fails (user doesn't exist), the CREATE will still proceed. The console will show:
+
+```
+⚠ Dependency 'cleanup.greq' failed but continuing (allow-dependency-failure enabled)
+✓ create-user.greq Status: 201 (123ms)
 ```
 
 ## Placeholders

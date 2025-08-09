@@ -1,0 +1,12 @@
+project: Invalid Test - Allow Dependency Failure Without Dependency
+allow-dependency-failure: true
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

@@ -1,0 +1,11 @@
+project: Delete Resource (Will Fail)
+is-http: true
+
+====
+
+DELETE /users/999999 HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

@@ -13,6 +13,10 @@ use colored::*;
 pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<ExecutionResult> {
     let file_path = file_path.as_ref();
     
+    // Parse the main file to check allow_dependency_failure setting
+    let main_greq_file = parse_greq_file(file_path)?;
+    let allow_dependency_failure = main_greq_file.header.allow_dependency_failure;
+    
     // Resolve the full dependency chain
     let dependency_chain = resolve_dependency_chain(file_path)?;
     
@@ -63,13 +67,20 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                         });
                     } else {
                         // This is a dependency failing
-                        return Ok(ExecutionResult {
-                            file_path: file_path.display().to_string(),
-                            success: false,
-                            response: None,
-                            failed_conditions: vec![format!("Dependency '{}' conditions failed", dep_name)],
-                            error: Some(format!("Dependency '{}' failed: {}", dep_name, failed_conditions.join(", "))),
-                        });
+                        if allow_dependency_failure {
+                            log::warn!("⚠ Dependency '{}' conditions failed, but continuing due to allow-dependency-failure", dep_name);
+                            println!("{} Dependency '{}' failed but continuing (allow-dependency-failure enabled)", "⚠".yellow(), dep_name.yellow());
+                            // Continue execution without storing this response
+                            continue;
+                        } else {
+                            return Ok(ExecutionResult {
+                                file_path: file_path.display().to_string(),
+                                success: false,
+                                response: None,
+                                failed_conditions: vec![format!("Dependency '{}' conditions failed", dep_name)],
+                                error: Some(format!("Dependency '{}' failed: {}", dep_name, failed_conditions.join(", "))),
+                            });
+                        }
                     }
                 }
                 
@@ -113,13 +124,20 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     });
                 } else {
                     // This is a dependency failing
-                    return Ok(ExecutionResult {
-                        file_path: file_path.display().to_string(),
-                        success: false,
-                        response: None,
-                        failed_conditions: Vec::new(),
-                        error: Some(format!("Dependency '{}' request failed: {e}", dep_name)),
-                    });
+                    if allow_dependency_failure {
+                        log::warn!("⚠ Dependency '{}' request failed, but continuing due to allow-dependency-failure: {}", dep_name, e);
+                        println!("{} Dependency '{}' request failed but continuing (allow-dependency-failure enabled): {}", "⚠".yellow(), dep_name.yellow(), e);
+                        // Continue execution without storing this response
+                        continue;
+                    } else {
+                        return Ok(ExecutionResult {
+                            file_path: file_path.display().to_string(),
+                            success: false,
+                            response: None,
+                            failed_conditions: Vec::new(),
+                            error: Some(format!("Dependency '{}' request failed: {e}", dep_name)),
+                        });
+                    }
                 }
             }
         }
