@@ -1,6 +1,32 @@
 # Greq 🚀
 
-`greq` is a Rust-based command-line tool for parsing, validating, and executing HTTP-like requests from `.greq` files. Ideal for developers working with raw HTTP interactions, API developers and maintainers and test engineers.
+A tester tool for APIs with templates and dependencies.
+
+As easy as:
+```yaml
+project: test my awesome API
+
+-- first delete the resource if it exists
+depends-on: delete-resource
+
+====
+
+POST /path/to/resource
+Host: api.example.com
+Content-Type: application/json
+
+{"name":"Awesome resource","description":"Awesome resource used for tests"}
+
+====
+
+-- evaluate the response
+status-code equals: 200
+response-body contains: id
+```
+
+## About
+
+`greq` is a Rust-based command-line tool for parsing, validating, and executing HTTP-like requests from `.greq` files. Ideal for API developers, maintainers, test engineers and developers working with raw HTTP interactions.
 
 ## 🚀 Features
 
