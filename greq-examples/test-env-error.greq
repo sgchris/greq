@@ -1,0 +1,11 @@
+project: Test Environment Variable Error Context
+is-http: true
+
+====
+
+GET /test HTTP/1.1
+host: $(environment.NONEXISTENT_HOST)
+
+====
+
+status-code equals: 200

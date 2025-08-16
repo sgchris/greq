@@ -1,0 +1,12 @@
+project: Test Placeholder Error Context
+is-http: true
+
+====
+
+GET /test HTTP/1.1
+host: httpbin.org
+authorization: Bearer $(dependency.nonexistent.token)
+
+====
+
+status-code equals: 200

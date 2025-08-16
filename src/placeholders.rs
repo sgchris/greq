@@ -7,6 +7,16 @@ use std::env;
 
 /// Replace placeholders in a string with values from dependency response or environment variables
 pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Result<String> {
+    replace_placeholders_with_context(text, dependency_response, "unknown", "unknown location")
+}
+
+/// Replace placeholders with file context for better error reporting
+pub fn replace_placeholders_with_context(
+    text: &str, 
+    dependency_response: &Response, 
+    file_path: &str, 
+    location: &str
+) -> Result<String> {
     let placeholder_regex = Regex::new(r"\$\(([\w\.\-\[\]]+)\)")?;
     let mut result = text.to_string();
     
@@ -15,9 +25,9 @@ pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Resul
         let placeholder_path = &capture[1];
         
         let value = if placeholder_path.starts_with("environment.") {
-            extract_environment_variable(placeholder_path)?
+            extract_environment_variable_with_context(placeholder_path, file_path, location)?
         } else {
-            extract_value_from_response(placeholder_path, dependency_response)?
+            extract_value_from_response_with_context(placeholder_path, dependency_response, file_path, location)?
         };
         
         result = result.replace(full_match, &value);
@@ -26,41 +36,50 @@ pub fn replace_placeholders(text: &str, dependency_response: &Response) -> Resul
     Ok(result)
 }
 
-/// Extract environment variable value from placeholder path
-fn extract_environment_variable(path: &str) -> Result<String> {
+/// Extract environment variable value from placeholder path with context
+fn extract_environment_variable_with_context(
+    path: &str, 
+    file_path: &str, 
+    location: &str
+) -> Result<String> {
     let env_var_name = path.strip_prefix("environment.")
-        .ok_or_else(|| GreqError::Placeholder(format!("Invalid environment placeholder: {path}")))?;
+        .ok_or_else(|| GreqError::Placeholder(format!("{}: {}: Invalid environment placeholder: {path}", file_path, location)))?;
     
     if env_var_name.is_empty() {
-        return Err(GreqError::Placeholder("Environment variable name cannot be empty".to_string()));
+        return Err(GreqError::Placeholder(format!("{}: {}: Environment variable name cannot be empty", file_path, location)));
     }
     
     log::debug!("Extracting environment variable: {env_var_name}");
     
     env::var(env_var_name)
-        .map_err(|_| GreqError::Placeholder(format!("Environment variable '{env_var_name}' not found")))
+        .map_err(|_| GreqError::Placeholder(format!("{}: {}: Environment variable '{env_var_name}' not found", file_path, location)))
 }
 
-/// Extract a value from response based on placeholder path
-fn extract_value_from_response(path: &str, response: &Response) -> Result<String> {
+/// Extract a value from response based on placeholder path with context
+fn extract_value_from_response_with_context(
+    path: &str, 
+    response: &Response, 
+    file_path: &str, 
+    location: &str
+) -> Result<String> {
     log::debug!("Extracting value for path: {path}");
     
     // Handle dependency-based paths like "dependency.status-code" or "dep.response-body.user.id"
     let parts: Vec<&str> = path.split('.').collect();
     if parts.is_empty() {
-        return Err(GreqError::Placeholder(format!("Invalid placeholder path: {path}")));
+        return Err(GreqError::Placeholder(format!("{}: {}: Invalid placeholder path: {path}", file_path, location)));
     }
     
     // Check if it starts with dependency prefix
     let actual_path = if parts[0] == "dependency" || parts[0] == "dep" {
         if parts.len() < 2 {
-            return Err(GreqError::Placeholder(format!("Invalid dependency placeholder path: {path}")));
+            return Err(GreqError::Placeholder(format!("{}: {}: Invalid dependency placeholder path: {path}", file_path, location)));
         }
         parts[1..].join(".")
     } else {
         // Handle legacy file-name-based paths for backward compatibility
         if parts.len() < 2 {
-            return Err(GreqError::Placeholder(format!("Invalid placeholder path: {path}")));
+            return Err(GreqError::Placeholder(format!("{}: {}: Invalid placeholder path: {path}", file_path, location)));
         }
         parts[1..].join(".")
     };
@@ -78,20 +97,25 @@ fn extract_value_from_response(path: &str, response: &Response) -> Result<String
                 let header_name = &stripped.to_lowercase();
                 Ok(response.headers.get(header_name).cloned().unwrap_or_default())
             } else if let Some(json_path) = actual_path.strip_prefix("response-body.") {
-                extract_json_path(&response.body, json_path)
+                extract_json_path_with_context(&response.body, json_path, file_path, location)
             } else {
-                Err(GreqError::Placeholder(format!("Unknown placeholder path: {actual_path}")))
+                Err(GreqError::Placeholder(format!("{}: {}: Unknown placeholder path: {actual_path}", file_path, location)))
             }
         }
     }
 }
 
-/// Extract value from JSON using JSONPath-like syntax
-fn extract_json_path(json_text: &str, path: &str) -> Result<String> {
+/// Extract value from JSON using JSONPath-like syntax with context
+fn extract_json_path_with_context(
+    json_text: &str, 
+    path: &str, 
+    file_path: &str, 
+    location: &str
+) -> Result<String> {
     let value: Value = serde_json::from_str(json_text)
-        .map_err(|_| GreqError::Placeholder("Response body is not valid JSON".to_string()))?;
+        .map_err(|_| GreqError::Placeholder(format!("{}: {}: Response body is not valid JSON", file_path, location)))?;
     
-    let result = navigate_json_path(&value, path)?;
+    let result = navigate_json_path_with_context(&value, path, file_path, location)?;
     
     match result {
         Value::String(s) => Ok(s),
@@ -102,8 +126,13 @@ fn extract_json_path(json_text: &str, path: &str) -> Result<String> {
     }
 }
 
-/// Navigate through JSON using a simple path syntax
-fn navigate_json_path(value: &Value, path: &str) -> Result<Value> {
+/// Navigate through JSON using a simple path syntax with context
+fn navigate_json_path_with_context(
+    value: &Value, 
+    path: &str, 
+    file_path: &str, 
+    location: &str
+) -> Result<Value> {
     let mut current = value;
     let parts = parse_json_path(path)?;
     
@@ -112,17 +141,17 @@ fn navigate_json_path(value: &Value, path: &str) -> Result<Value> {
             PathPart::Property(key) => {
                 if let Value::Object(obj) = current {
                     current = obj.get(&key)
-                        .ok_or_else(|| GreqError::Placeholder(format!("Property '{key}' not found")))?;
+                        .ok_or_else(|| GreqError::Placeholder(format!("{}: {}: Property '{}' not found in JSON path '{}'", file_path, location, key, path)))?;
                 } else {
-                    return Err(GreqError::Placeholder(format!("Cannot access property '{key}' on non-object")));
+                    return Err(GreqError::Placeholder(format!("{}: {}: Cannot access property '{}' on non-object in JSON path '{}'", file_path, location, key, path)));
                 }
             },
             PathPart::Index(index) => {
                 if let Value::Array(arr) = current {
                     current = arr.get(index)
-                        .ok_or_else(|| GreqError::Placeholder(format!("Array index {index} out of bounds")))?;
+                        .ok_or_else(|| GreqError::Placeholder(format!("{}: {}: Array index {} out of bounds (length: {}) in JSON path '{}'", file_path, location, index, arr.len(), path)))?;
                 } else {
-                    return Err(GreqError::Placeholder(format!("Cannot access index {index} on non-array")));
+                    return Err(GreqError::Placeholder(format!("{}: {}: Cannot access index {} on non-array in JSON path '{}'", file_path, location, index, path)));
                 }
             },
         }
@@ -206,29 +235,47 @@ pub fn replace_placeholders_in_greq_file_with_optional_response(
     };
     
     let response = dependency_response.unwrap_or(&dummy_response);
+    let file_path = &greq_file.file_path;
     
     // Replace in URI
-    greq_file.content.request_line.uri = replace_placeholders(
+    greq_file.content.request_line.uri = replace_placeholders_with_context(
         &greq_file.content.request_line.uri,
         response,
+        file_path,
+        "request URI",
     )?;
     
     // Replace in headers
     let mut updated_headers = HashMap::new();
     for (key, value) in &greq_file.content.headers {
-        let updated_value = replace_placeholders(value, response)?;
+        let updated_value = replace_placeholders_with_context(
+            value, 
+            response, 
+            file_path, 
+            &format!("header '{}'", key)
+        )?;
         updated_headers.insert(key.clone(), updated_value);
     }
     greq_file.content.headers = updated_headers;
     
     // Replace in body
     if let Some(body) = &greq_file.content.body {
-        greq_file.content.body = Some(replace_placeholders(body, response)?);
+        greq_file.content.body = Some(replace_placeholders_with_context(
+            body, 
+            response, 
+            file_path, 
+            "request body"
+        )?);
     }
     
     // Replace in condition values
-    for condition in &mut greq_file.footer.conditions {
-        condition.value = replace_placeholders(&condition.value, response)?;
+    for (i, condition) in greq_file.footer.conditions.iter_mut().enumerate() {
+        condition.value = replace_placeholders_with_context(
+            &condition.value, 
+            response, 
+            file_path, 
+            &format!("condition {} value", i + 1)
+        )?;
     }
     
     Ok(())
@@ -368,6 +415,94 @@ mod tests {
         match &parts[2] {
             PathPart::Property(name) => assert_eq!(name, "id"),
             _ => panic!("Expected property"),
+        }
+    }
+
+    #[test]
+    fn test_placeholder_error_with_context() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                number_of_retries: 0,
+                depends_on: None,
+                timeout: None,
+                allow_dependency_failure: false,
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: {
+                    let mut headers = HashMap::new();
+                    headers.insert("authorization".to_string(), "Bearer $(dependency.nonexistent.token)".to_string());
+                    headers
+                },
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "test-file.greq".to_string(),
+        };
+
+        let result = replace_placeholders_in_greq_file_with_optional_response(&mut greq_file, None);
+
+        assert!(result.is_err());
+        if let Err(error) = result {
+            let error_message = error.to_string();
+            assert!(error_message.contains("test-file.greq"));
+            assert!(error_message.contains("header 'authorization'"));
+            assert!(error_message.contains("Unknown placeholder path: nonexistent.token"));
+        }
+    }
+
+    #[test]
+    fn test_environment_variable_error_with_context() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                number_of_retries: 0,
+                depends_on: None,
+                timeout: None,
+                allow_dependency_failure: false,
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: {
+                    let mut headers = HashMap::new();
+                    headers.insert("host".to_string(), "$(environment.NONEXISTENT_HOST)".to_string());
+                    headers
+                },
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "test-env.greq".to_string(),
+        };
+
+        let result = replace_placeholders_in_greq_file_with_optional_response(&mut greq_file, None);
+
+        assert!(result.is_err());
+        if let Err(error) = result {
+            let error_message = error.to_string();
+            assert!(error_message.contains("test-env.greq"));
+            assert!(error_message.contains("header 'host'"));
+            assert!(error_message.contains("Environment variable 'NONEXISTENT_HOST' not found"));
         }
     }
 }
