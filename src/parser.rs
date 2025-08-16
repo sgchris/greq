@@ -15,25 +15,41 @@ pub fn parse_greq_file<P: AsRef<Path>>(file_path: P) -> Result<GreqFile> {
         .map_err(|_| GreqError::FileNotFound(file_path.display().to_string()))?;
     
     let file_path_str = file_path.display().to_string();
-    let sections = split_into_sections(&content, "=")?;
+    
+    // Parse with line tracking
+    parse_greq_content(&content, &file_path_str)
+}
+
+/// Parse greq content with file path for error reporting
+fn parse_greq_content(content: &str, file_path: &str) -> Result<GreqFile> {
+    let lines: Vec<&str> = content.lines().collect();
+    let sections = split_into_sections(content, "=")?;
     
     if sections.len() < 2 {
-        return Err(GreqError::Parse("Invalid file format: must have at least header and content sections".to_string()));
+        return Err(GreqError::Parse(format!("{}: Invalid file format: must have at least header and content sections", file_path)));
     }
     
-    let header = parse_header(&sections[0])?;
+    // Find section line numbers
+    let section_starts = find_section_line_numbers(&lines, "=");
+    
+    let header = parse_header_with_lines(&sections[0], file_path, 1)?;
     let delimiter = header.delimiter.clone();
     
     // Re-split with custom delimiter if specified
-    let sections = if delimiter != "=" {
-        split_into_sections(&content, &delimiter)?
+    let (final_sections, final_section_starts) = if delimiter != "=" {
+        let new_sections = split_into_sections(content, &delimiter)?;
+        let new_starts = find_section_line_numbers(&lines, &delimiter);
+        (new_sections, new_starts)
     } else {
-        sections
+        (sections, section_starts)
     };
     
-    let content_section = parse_content(&sections[1])?;
-    let footer = if sections.len() > 2 {
-        parse_footer(&sections[2])?
+    let content_start_line = if final_section_starts.is_empty() { 1 } else { final_section_starts[0] + 2 };
+    let content_section = parse_content_with_lines(&final_sections[1], file_path, content_start_line)?;
+    
+    let footer = if final_sections.len() > 2 {
+        let footer_start_line = if final_section_starts.len() >= 2 { final_section_starts[1] + 2 } else { content_start_line + final_sections[1].lines().count() + 2 };
+        parse_footer_with_lines(&final_sections[2], file_path, footer_start_line)?
     } else {
         Footer::default()
     };
@@ -42,7 +58,7 @@ pub fn parse_greq_file<P: AsRef<Path>>(file_path: P) -> Result<GreqFile> {
         header,
         content: content_section,
         footer,
-        file_path: file_path_str,
+        file_path: file_path.to_string(),
     })
 }
 
@@ -68,7 +84,218 @@ fn split_into_sections(content: &str, delimiter: &str) -> Result<Vec<String>> {
     Ok(sections)
 }
 
+/// Find line numbers where section delimiters occur
+fn find_section_line_numbers(lines: &[&str], delimiter: &str) -> Vec<usize> {
+    let mut section_starts = Vec::new();
+    
+    for (i, line) in lines.iter().enumerate() {
+        if line.chars().all(|c| c == delimiter.chars().next().unwrap_or('=')) && line.len() >= 4 {
+            section_starts.push(i + 1); // Convert to 1-based line numbers
+        }
+    }
+    
+    section_starts
+}
+
+/// Parse the header section with line number tracking
+fn parse_header_with_lines(header_text: &str, file_path: &str, start_line: usize) -> Result<Header> {
+    let mut header = Header::default();
+    
+    for (line_offset, line) in header_text.lines().enumerate() {
+        let line_num = start_line + line_offset;
+        let line = line.trim();
+        
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with("--") {
+            continue;
+        }
+        
+        if let Some(colon_pos) = line.find(':') {
+            let key = line[..colon_pos].trim().to_lowercase();
+            let value = line[colon_pos + 1..].trim();
+            
+            match key.as_str() {
+                "project" => header.project = Some(value.to_string()),
+                "is-http" => header.is_http = parse_bool(value)
+                    .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid boolean value '{}' for is-http", file_path, line_num, value)))?,
+                "delimiter" => header.delimiter = value.to_string(),
+                "extends" => header.extends = Some(value.to_string()),
+                "number-of-retries" => header.number_of_retries = value.parse()
+                    .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid number '{}' for number-of-retries", file_path, line_num, value)))?,
+                "depends-on" => header.depends_on = Some(value.to_string()),
+                "allow-dependency-failure" => header.allow_dependency_failure = parse_bool(value)
+                    .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid boolean value '{}' for allow-dependency-failure", file_path, line_num, value)))?,
+                "timeout" => {
+                    let timeout_ms: u64 = value.parse()
+                        .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid timeout value '{}'", file_path, line_num, value)))?;
+                    header.timeout = Some(Duration::from_millis(timeout_ms));
+                },
+                _ => log::warn!("{}:{}: Unknown header property: {}", file_path, line_num, key),
+            }
+        } else {
+            return Err(GreqError::Parse(format!("{}:{}: Missing colon in header line: '{}'", file_path, line_num, line)));
+        }
+    }
+    
+    // Validate header properties
+    validate_header(&header)?;
+    
+    Ok(header)
+}
+
+/// Parse the content section with line number tracking
+fn parse_content_with_lines(content_text: &str, file_path: &str, start_line: usize) -> Result<Content> {
+    let lines: Vec<&str> = content_text.lines().collect();
+    
+    if lines.is_empty() {
+        return Err(GreqError::Parse(format!("{}:{}: Content section cannot be empty", file_path, start_line)));
+    }
+    
+    // Parse request line
+    let request_line = parse_request_line_with_line(lines[0], file_path, start_line)?;
+    
+    // Parse headers and find body start
+    let mut headers = HashMap::new();
+    let mut body_start = lines.len();
+    
+    for (i, line) in lines.iter().enumerate().skip(1) {
+        let line_num = start_line + i;
+        let line = line.trim();
+        
+        if line.is_empty() {
+            body_start = i + 1;
+            break;
+        }
+        
+        if let Some(colon_pos) = line.find(':') {
+            let key = line[..colon_pos].trim().to_lowercase();
+            let value = line[colon_pos + 1..].trim().to_string();
+            headers.insert(key, value);
+        } else {
+            return Err(GreqError::Parse(format!("{}:{}: Missing colon in header line: '{}'", file_path, line_num, line)));
+        }
+    }
+    
+    // Parse body
+    let body = if body_start < lines.len() {
+        let body_lines: Vec<&str> = lines[body_start..].to_vec();
+        if body_lines.iter().any(|line| !line.trim().is_empty()) {
+            Some(body_lines.join("\n"))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    Ok(Content {
+        request_line,
+        headers,
+        body,
+    })
+}
+
+/// Parse request line with line number tracking
+fn parse_request_line_with_line(line: &str, file_path: &str, line_num: usize) -> Result<RequestLine> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    
+    if parts.len() < 2 {
+        return Err(GreqError::Parse(format!("{}:{}: Invalid request line format, expected 'METHOD URI [VERSION]': '{}'", file_path, line_num, line)));
+    }
+    
+    let method = parts[0].to_string();
+    let uri = parts[1].to_string();
+    let version = if parts.len() > 2 {
+        parts[2].to_string()
+    } else {
+        "HTTP/1.1".to_string()
+    };
+    
+    Ok(RequestLine { method, uri, version })
+}
+
+/// Parse the footer section with line number tracking
+fn parse_footer_with_lines(footer_text: &str, file_path: &str, start_line: usize) -> Result<Footer> {
+    let mut conditions = Vec::new();
+    
+    for (line_offset, line) in footer_text.lines().enumerate() {
+        let line_num = start_line + line_offset;
+        let line = line.trim();
+        
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with("--") {
+            continue;
+        }
+        
+        match parse_condition_with_line(line, file_path, line_num) {
+            Ok(condition) => conditions.push(condition),
+            Err(e) => return Err(e),
+        }
+    }
+    
+    Ok(Footer { conditions })
+}
+
+/// Parse a single condition line with line number tracking
+fn parse_condition_with_line(line: &str, file_path: &str, line_num: usize) -> Result<Condition> {
+    let mut parts = line.split_whitespace().collect::<Vec<&str>>();
+    let mut is_or = false;
+    let mut is_not = false;
+    let mut case_sensitive = false;
+    
+    // Check for prefixes
+    if parts.first() == Some(&"or") {
+        is_or = true;
+        parts.remove(0);
+    }
+    
+    if parts.first() == Some(&"not") {
+        is_not = true;
+        parts.remove(0);
+    }
+    
+    if parts.len() < 3 {
+        return Err(GreqError::Parse(format!("{}:{}: Invalid condition format, expected 'PROPERTY OPERATOR: VALUE': '{}'", file_path, line_num, line)));
+    }
+    
+    // Find colon to separate operator from value (use first colon, not last)
+    let colon_pos = line.find(':')
+        .ok_or_else(|| GreqError::Parse(format!("{}:{}: Missing colon in condition: '{}'", file_path, line_num, line)))?;
+    
+    let before_colon = &line[..colon_pos];
+    let value = line[colon_pos + 1..].trim().to_string();
+    
+    // Check for case-sensitive flag
+    if before_colon.contains("case-sensitive") {
+        case_sensitive = true;
+    }
+    
+    // Parse key and operator
+    let key_and_op: Vec<&str> = before_colon.split_whitespace()
+        .filter(|&s| s != "or" && s != "not" && s != "case-sensitive")
+        .collect();
+    
+    if key_and_op.len() < 2 {
+        return Err(GreqError::Parse(format!("{}:{}: Invalid condition format, missing operator: '{}'", file_path, line_num, line)));
+    }
+    
+    let key = parse_condition_key(key_and_op[0])
+        .map_err(|e| GreqError::Parse(format!("{}:{}: {}", file_path, line_num, e)))?;
+    let operator = parse_operator(key_and_op[1])
+        .map_err(|e| GreqError::Parse(format!("{}:{}: {}", file_path, line_num, e)))?;
+    
+    Ok(Condition {
+        is_or,
+        is_not,
+        key,
+        operator,
+        case_sensitive,
+        value,
+    })
+}
+
 /// Parse the header section
+#[allow(dead_code)]
 fn parse_header(header_text: &str) -> Result<Header> {
     let mut header = Header::default();
     
@@ -122,6 +349,7 @@ fn validate_header(header: &Header) -> Result<()> {
 }
 
 /// Parse the content section (HTTP request)
+#[allow(dead_code)]
 fn parse_content(content_text: &str) -> Result<Content> {
     let lines: Vec<&str> = content_text.lines().collect();
     
@@ -171,6 +399,8 @@ fn parse_content(content_text: &str) -> Result<Content> {
 }
 
 /// Parse the HTTP request line
+/// Parse request line
+#[allow(dead_code)]
 fn parse_request_line(line: &str) -> Result<RequestLine> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     
@@ -196,10 +426,11 @@ fn parse_request_line(line: &str) -> Result<RequestLine> {
 }
 
 /// Parse the footer section (conditions)
+#[allow(dead_code)]
 fn parse_footer(footer_text: &str) -> Result<Footer> {
     let mut conditions = Vec::new();
     
-    for line in footer_text.lines() {
+    for (line_num, line) in footer_text.lines().enumerate() {
         let line = line.trim();
         
         // Skip empty lines and comments
@@ -207,13 +438,19 @@ fn parse_footer(footer_text: &str) -> Result<Footer> {
             continue;
         }
         
-        conditions.push(parse_condition(line)?);
+        match parse_condition(line) {
+            Ok(condition) => conditions.push(condition),
+            Err(e) => {
+                return Err(GreqError::Parse(format!("Line {}: {}", line_num + 1, e)));
+            }
+        }
     }
     
     Ok(Footer { conditions })
 }
 
 /// Parse a single condition line
+#[allow(dead_code)]
 fn parse_condition(line: &str) -> Result<Condition> {
     let mut parts = line.split_whitespace().collect::<Vec<&str>>();
     let mut is_or = false;
@@ -235,8 +472,8 @@ fn parse_condition(line: &str) -> Result<Condition> {
         return Err(GreqError::Parse(format!("Invalid condition format: {line}")));
     }
     
-    // Find colon to separate operator from value
-    let colon_pos = line.rfind(':')
+    // Find colon to separate operator from value (use first colon, not last)
+    let colon_pos = line.find(':')
         .ok_or_else(|| GreqError::Parse(format!("Missing colon in condition: {line}")))?;
     
     let before_colon = &line[..colon_pos];
@@ -520,5 +757,173 @@ allow-dependency-failure: true
         
         let result = validate_header(&header);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_condition_parsing_with_multiple_colons_in_value() {
+        let content = r#"
+project: test project
+is-http: true
+
+====
+
+GET /test HTTP/1.1
+host: httpbin.org
+
+====
+
+response-body.domain.domain_url equals: https://greq-test-grauth.me
+status-code equals: 200
+response-body contains: https://example.com:8080/path?param=value
+response-body.api_url equals: http://localhost:3000/api/v1/users?filter=active
+"#;
+
+        let result = parse_greq_content(content, "test.greq");
+        assert!(result.is_ok(), "Failed to parse file with URL values: {:?}", result.err());
+        
+        let greq_file = result.unwrap();
+        assert_eq!(greq_file.footer.conditions.len(), 4);
+        
+        // Check the URL condition with domain path
+        let url_condition = &greq_file.footer.conditions[0];
+        assert_eq!(url_condition.value, "https://greq-test-grauth.me");
+        assert!(matches!(url_condition.key, ConditionKey::ResponseBodyPath(_)));
+        assert!(matches!(url_condition.operator, Operator::Equals));
+        
+        // Check the contains condition with port and path
+        let contains_condition = &greq_file.footer.conditions[2];
+        assert_eq!(contains_condition.value, "https://example.com:8080/path?param=value");
+        assert!(matches!(contains_condition.key, ConditionKey::ResponseBody));
+        assert!(matches!(contains_condition.operator, Operator::Contains));
+        
+        // Check the complex API URL
+        let api_condition = &greq_file.footer.conditions[3];
+        assert_eq!(api_condition.value, "http://localhost:3000/api/v1/users?filter=active");
+        assert!(matches!(api_condition.key, ConditionKey::ResponseBodyPath(_)));
+        assert!(matches!(api_condition.operator, Operator::Equals));
+    }
+
+    #[test]
+    fn test_parsing_error_shows_line_number_and_file() {
+        let content = r#"
+project: test project
+is-http: true
+
+====
+
+GET /test HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code invalid-operator: 200
+response-body equals: success
+"#;
+
+        let result = parse_greq_content(content, "test.greq");
+        assert!(result.is_err());
+        
+        let error = result.err().unwrap();
+        let error_msg = format!("{}", error);
+        
+        // Should contain file name and line number
+        assert!(error_msg.contains("test.greq"), "Error should contain file name: {}", error_msg);
+        assert!(error_msg.contains(":12:"), "Error should contain line number 12: {}", error_msg);
+        assert!(error_msg.contains("invalid-operator"), "Error should mention the invalid operator: {}", error_msg);
+    }
+
+    #[test]
+    fn test_parsing_error_missing_colon_in_condition() {
+        let content = r#"
+project: test project
+
+====
+
+GET /test HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals 200
+"#;
+
+        let result = parse_greq_content(content, "missing-colon.greq");
+        assert!(result.is_err());
+        
+        let error = result.err().unwrap();
+        let error_msg = format!("{}", error);
+        
+        assert!(error_msg.contains("missing-colon.greq"), "Error should contain file name: {}", error_msg);
+        assert!(error_msg.contains(":11:"), "Error should contain line number 11: {}", error_msg);
+        assert!(error_msg.contains("Missing colon"), "Error should mention missing colon: {}", error_msg);
+    }
+
+    #[test]
+    fn test_parsing_error_in_header_shows_line_number() {
+        let content = r#"
+project: test project
+invalid-property without-colon
+
+====
+
+GET /test HTTP/1.1
+host: httpbin.org
+"#;
+
+        let result = parse_greq_content(content, "header-error.greq");
+        assert!(result.is_err());
+        
+        let error = result.err().unwrap();
+        let error_msg = format!("{}", error);
+        
+        assert!(error_msg.contains("header-error.greq"), "Error should contain file name: {}", error_msg);
+        assert!(error_msg.contains(":2:"), "Error should contain line number 2: {}", error_msg);
+        assert!(error_msg.contains("Missing colon"), "Error should mention missing colon: {}", error_msg);
+    }
+
+    #[test]
+    fn test_complex_url_conditions() {
+        let content = r#"
+project: URL test with complex scenarios
+
+====
+
+GET /test HTTP/1.1
+host: example.com
+
+====
+
+response-body.api.endpoint equals: https://api.example.com:443/v1/users?filter=active&sort=name
+response-body.callback_url equals: http://localhost:3000/webhook?token=abc123&event=user.created
+headers.location contains: https://secure.example.com:8443/redirect?target=dashboard
+response-body.websocket_url equals: wss://ws.example.com:8080/stream?auth=bearer-token
+response-body.database_url equals: postgresql://user:pass@localhost:5432/dbname?sslmode=require
+"#;
+
+        let result = parse_greq_content(content, "url-test.greq");
+        assert!(result.is_ok(), "Failed to parse file with complex URLs: {:?}", result.err());
+        
+        let greq_file = result.unwrap();
+        assert_eq!(greq_file.footer.conditions.len(), 5);
+        
+        // Check complex API URL with query parameters
+        let api_condition = &greq_file.footer.conditions[0];
+        assert_eq!(api_condition.value, "https://api.example.com:443/v1/users?filter=active&sort=name");
+        
+        // Check callback URL with query parameters
+        let callback_condition = &greq_file.footer.conditions[1];
+        assert_eq!(callback_condition.value, "http://localhost:3000/webhook?token=abc123&event=user.created");
+        
+        // Check secure URL in header check
+        let location_condition = &greq_file.footer.conditions[2];
+        assert_eq!(location_condition.value, "https://secure.example.com:8443/redirect?target=dashboard");
+        
+        // Check WebSocket URL
+        let websocket_condition = &greq_file.footer.conditions[3];
+        assert_eq!(websocket_condition.value, "wss://ws.example.com:8080/stream?auth=bearer-token");
+        
+        // Check database URL with credentials and parameters
+        let db_condition = &greq_file.footer.conditions[4];
+        assert_eq!(db_condition.value, "postgresql://user:pass@localhost:5432/dbname?sslmode=require");
     }
 }
