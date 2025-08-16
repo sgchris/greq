@@ -49,6 +49,7 @@ condition: value
 | `extends` | Base file to inherit from | `extends: base-config.greq` | None |
 | `depends-on` | File to execute first | `depends-on: auth-setup.greq` | None |
 | `allow-dependency-failure` | Continue if dependency fails | `allow-dependency-failure: true` | `false` |
+| `show-warnings` | Show warning messages during execution | `show-warnings: false` | `true` |
 | `timeout` | Request timeout in milliseconds | `timeout: 5000` | `30000` |
 | `number-of-retries` | Retry attempts on failure | `number-of-retries: 3` | `0` |
 
@@ -62,6 +63,9 @@ Executes another test file before this one and makes its response available for 
 
 #### `allow-dependency-failure`
 When set to `true`, allows the current test to continue executing even if the dependency defined by `depends-on` fails. This property can only be used when `depends-on` is also defined. Useful for scenarios like cleanup operations that may fail if the resource doesn't exist.
+
+#### `show-warnings`
+Controls whether warning messages are displayed during execution. When set to `false`, suppresses warnings such as placeholder replacement notifications when dependencies fail. Default is `true`.
 
 #### `timeout`
 Maximum time to wait for a response in milliseconds. Requests exceeding this time will fail.
@@ -308,6 +312,80 @@ In this example, if the DELETE fails (user doesn't exist), the CREATE will still
 ⚠ Dependency 'cleanup.greq' failed but continuing (allow-dependency-failure enabled)
 ✓ create-user.greq Status: 201 (123ms)
 ```
+
+### Dependency Failure and Placeholders
+
+When a dependency fails and `allow-dependency-failure: true` is set, any dependency placeholders in the current file will be handled as follows:
+
+1. **Dependency placeholders** (`$(dependency.*)`) are replaced with empty strings
+2. **Environment placeholders** (`$(environment.*)`) continue to work normally
+3. **Warning message** is shown for the first placeholder found (if `show-warnings: true`)
+
+#### Example with Placeholders
+
+**auth-setup.greq:**
+```greq
+project: Authentication Setup
+is-http: true
+
+====
+
+POST /auth/login HTTP/1.1
+host: api.example.com
+content-type: application/json
+
+{"username": "test", "password": "secret"}
+
+====
+
+status-code equals: 200
+response-body contains: token
+```
+
+**main-test.greq:**
+```greq
+project: Main Test with Optional Auth
+depends-on: auth-setup
+allow-dependency-failure: true
+show-warnings: true
+is-http: true
+
+====
+
+GET /protected/resource HTTP/1.1
+host: api.example.com
+authorization: Bearer $(dependency.response-body.json.token)
+x-fallback-auth: $(environment.FALLBACK_TOKEN)
+
+====
+
+status-code equals: 200
+```
+
+If `auth-setup.greq` fails, the console will show:
+
+```
+⚠ Dependency 'auth-setup.greq' failed but continuing (allow-dependency-failure enabled)
+⚠ Warning: main-test.greq: header 'authorization': Dependency placeholder found but dependency failed. Placeholder will be replaced with empty string.
+✓ main-test.greq Status: 200 (156ms)
+```
+
+The request will be sent with:
+- `authorization: Bearer ` (empty token, just "Bearer ")
+- `x-fallback-auth: your-fallback-token` (environment variable still works)
+
+#### Controlling Warning Messages
+
+Use `show-warnings: false` to suppress placeholder warning messages:
+
+```greq
+project: Silent Dependency Failure
+depends-on: auth-setup
+allow-dependency-failure: true
+show-warnings: false
+```
+
+This will still replace dependency placeholders with empty strings but won't show warnings.
 
 ## Placeholders
 

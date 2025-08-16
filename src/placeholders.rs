@@ -226,6 +226,56 @@ pub fn replace_placeholders_in_greq_file_with_optional_response(
     greq_file: &mut crate::models::GreqFile,
     dependency_response: Option<&Response>,
 ) -> Result<()> {
+    replace_placeholders_in_greq_file_with_dependency_handling(
+        greq_file,
+        dependency_response,
+        false, // dependency_failed
+    )
+}
+
+/// Replace dependency placeholders with empty string when dependency fails
+fn replace_dependency_placeholders_with_empty_string(
+    text: &str,
+    file_path: &str,
+    location: &str,
+    _should_warn: bool,
+) -> Result<String> {
+    let mut result = text.to_string();
+    let placeholder_regex = regex::Regex::new(r"\$\(([^)]+)\)").unwrap();
+    
+    // Find and replace only dependency placeholders
+    for cap in placeholder_regex.find_iter(text) {
+        let placeholder = cap.as_str();
+        let path = &placeholder[2..placeholder.len()-1]; // Remove $( and )
+        
+        if path.starts_with("dependency.") {
+            // Replace dependency placeholder with empty string
+            result = result.replace(placeholder, "");
+        } else if path.starts_with("environment.") {
+            // Keep environment placeholders - they should still work
+            let env_result = extract_environment_variable_with_context(path, file_path, location)?;
+            result = result.replace(placeholder, &env_result);
+        } else {
+            // Unknown placeholder type - replace with empty string to avoid errors
+            result = result.replace(placeholder, "");
+        }
+    }
+    
+    Ok(result)
+}
+
+/// Enhanced version that handles dependency failures and shows warnings
+pub fn replace_placeholders_in_greq_file_with_dependency_handling(
+    greq_file: &mut crate::models::GreqFile,
+    dependency_response: Option<&Response>,
+    dependency_failed: bool,
+) -> Result<()> {
+    // Check if we should show warnings and if dependency failure with placeholders should warn
+    let should_warn = greq_file.header.show_warnings 
+        && greq_file.header.allow_dependency_failure 
+        && greq_file.header.depends_on.is_some() 
+        && dependency_failed;
+    
     // Create a dummy response if none provided (for environment-only placeholders)
     let dummy_response = Response {
         status_code: 200,
@@ -237,22 +287,39 @@ pub fn replace_placeholders_in_greq_file_with_optional_response(
     let response = dependency_response.unwrap_or(&dummy_response);
     let file_path = &greq_file.file_path;
     
+    let mut placeholder_warning_shown = false;
+    
+    // Helper function to replace placeholders and handle warnings
+    let replace_with_warning = |text: &str, location: &str, warning_shown: &mut bool| -> Result<String> {
+        if dependency_failed && greq_file.header.allow_dependency_failure {
+            // For dependency failures with allow-dependency-failure, replace dependency placeholders with empty string
+            let result = replace_dependency_placeholders_with_empty_string(text, file_path, location, should_warn && !*warning_shown)?;
+            if should_warn && !*warning_shown && result != *text {
+                // Show warning only for the first placeholder encountered
+                log::warn!("\x1b[33m⚠ Warning: {}: {}: Dependency placeholder found but dependency failed. Placeholder will be replaced with empty string.\x1b[0m", file_path, location);
+                *warning_shown = true;
+            }
+            Ok(result)
+        } else {
+            // Normal replacement
+            replace_placeholders_with_context(text, response, file_path, location)
+        }
+    };
+    
     // Replace in URI
-    greq_file.content.request_line.uri = replace_placeholders_with_context(
+    greq_file.content.request_line.uri = replace_with_warning(
         &greq_file.content.request_line.uri,
-        response,
-        file_path,
         "request URI",
+        &mut placeholder_warning_shown,
     )?;
     
     // Replace in headers
     let mut updated_headers = HashMap::new();
     for (key, value) in &greq_file.content.headers {
-        let updated_value = replace_placeholders_with_context(
-            value, 
-            response, 
-            file_path, 
-            &format!("header '{}'", key)
+        let updated_value = replace_with_warning(
+            value,
+            &format!("header '{}'", key),
+            &mut placeholder_warning_shown,
         )?;
         updated_headers.insert(key.clone(), updated_value);
     }
@@ -260,21 +327,19 @@ pub fn replace_placeholders_in_greq_file_with_optional_response(
     
     // Replace in body
     if let Some(body) = &greq_file.content.body {
-        greq_file.content.body = Some(replace_placeholders_with_context(
-            body, 
-            response, 
-            file_path, 
-            "request body"
+        greq_file.content.body = Some(replace_with_warning(
+            body,
+            "request body",
+            &mut placeholder_warning_shown,
         )?);
     }
     
     // Replace in condition values
     for (i, condition) in greq_file.footer.conditions.iter_mut().enumerate() {
-        condition.value = replace_placeholders_with_context(
-            &condition.value, 
-            response, 
-            file_path, 
-            &format!("condition {} value", i + 1)
+        condition.value = replace_with_warning(
+            &condition.value,
+            &format!("condition {} value", i + 1),
+            &mut placeholder_warning_shown,
         )?;
     }
     
@@ -433,6 +498,7 @@ mod tests {
                 depends_on: None,
                 timeout: None,
                 allow_dependency_failure: false,
+                show_warnings: true,
             },
             content: Content {
                 request_line: RequestLine {
@@ -477,6 +543,7 @@ mod tests {
                 depends_on: None,
                 timeout: None,
                 allow_dependency_failure: false,
+                show_warnings: true,
             },
             content: Content {
                 request_line: RequestLine {
@@ -504,5 +571,97 @@ mod tests {
             assert!(error_message.contains("header 'host'"));
             assert!(error_message.contains("Environment variable 'NONEXISTENT_HOST' not found"));
         }
+    }
+
+    #[test]
+    fn test_dependency_failure_placeholder_replacement() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                number_of_retries: 0,
+                depends_on: Some("dependency-file".to_string()),
+                timeout: None,
+                allow_dependency_failure: true,
+                show_warnings: true,
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: {
+                    let mut headers = HashMap::new();
+                    headers.insert("authorization".to_string(), "Bearer $(dependency.status-code)".to_string());
+                    headers.insert("host".to_string(), "$(environment.TEST_HOST)".to_string());
+                    headers
+                },
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "test-file.greq".to_string(),
+        };
+
+        // Set environment variable for testing
+        std::env::set_var("TEST_HOST", "example.com");
+
+        let result = replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, true);
+
+        assert!(result.is_ok());
+        // Dependency placeholder should be empty
+        assert_eq!(greq_file.content.headers.get("authorization"), Some(&"Bearer ".to_string()));
+        // Environment placeholder should still work
+        assert_eq!(greq_file.content.headers.get("host"), Some(&"example.com".to_string()));
+
+        // Clean up
+        std::env::remove_var("TEST_HOST");
+    }
+
+    #[test]
+    fn test_no_warning_when_show_warnings_false() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                number_of_retries: 0,
+                depends_on: Some("dependency-file".to_string()),
+                timeout: None,
+                allow_dependency_failure: true,
+                show_warnings: false, // Warnings disabled
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: {
+                    let mut headers = HashMap::new();
+                    headers.insert("authorization".to_string(), "Bearer $(dependency.status-code)".to_string());
+                    headers
+                },
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "test-file.greq".to_string(),
+        };
+
+        let result = replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, true);
+
+        assert!(result.is_ok());
+        // Dependency placeholder should still be replaced with empty string
+        assert_eq!(greq_file.content.headers.get("authorization"), Some(&"Bearer ".to_string()));
+        // No warning should be logged (we can't easily test log output, but function should complete without error)
     }
 }

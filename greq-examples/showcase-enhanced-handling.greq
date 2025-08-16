@@ -1,0 +1,23 @@
+project: Showcase New Features - Enhanced Dependency Handling
+is-http: true
+depends-on: showcase-dependency-failure
+allow-dependency-failure: true
+show-warnings: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+authorization: Bearer $(dependency.status-code)
+x-custom-header: Value-$(dependency.headers.content-type)
+x-environment-var: $(environment.USERNAME)
+
+{
+  "dependency_status": "$(dependency.status-code)",
+  "environment_info": "$(environment.COMPUTERNAME)"
+}
+
+====
+
+status-code equals: 200
+response-body contains: args

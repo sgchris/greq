@@ -1,6 +1,6 @@
 use crate::models::{GreqFile, Response, ExecutionResult};
 use crate::parser::{parse_greq_file, merge_greq_files, resolve_file_path};
-use crate::placeholders::{replace_placeholders_in_greq_file, replace_placeholders_in_greq_file_with_optional_response};
+use crate::placeholders::{replace_placeholders_in_greq_file, replace_placeholders_in_greq_file_with_optional_response, replace_placeholders_in_greq_file_with_dependency_handling};
 use crate::conditions::evaluate_conditions;
 use crate::error::{GreqError, Result};
 use reqwest::Client;
@@ -22,6 +22,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
     
     // Execute dependencies in order (from root to target)
     let mut dependency_responses: HashMap<PathBuf, Response> = HashMap::new();
+    let mut failed_dependencies: HashSet<PathBuf> = HashSet::new();
     
     for dep_path in dependency_chain {
         log::info!("Executing greq file: {dep_path:?}");
@@ -31,14 +32,22 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         // Handle extends recursively
         greq_file = resolve_extends_chain(greq_file, &dep_path)?;
         
+        // Check if the dependency this file depends on has failed
+        let dependency_failed = if let Some(depends_on) = &greq_file.header.depends_on {
+            let dep_response_path = resolve_file_path(&dep_path, depends_on);
+            failed_dependencies.contains(&dep_response_path)
+        } else {
+            false
+        };
+        
         // Replace placeholders - first environment variables, then dependency placeholders if available
         if let Some(depends_on) = &greq_file.header.depends_on {
             let dep_response_path = resolve_file_path(&dep_path, depends_on);
             if let Some(dep_response) = dependency_responses.get(&dep_response_path) {
                 replace_placeholders_in_greq_file(&mut greq_file, dep_response)?;
             } else {
-                // Replace only environment placeholders
-                replace_placeholders_in_greq_file_with_optional_response(&mut greq_file, None)?;
+                // Use enhanced replacement that handles dependency failures
+                replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, dependency_failed)?;
             }
         } else {
             // Replace only environment placeholders (no dependencies)
@@ -70,6 +79,8 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                         if allow_dependency_failure {
                             log::warn!("⚠ Dependency '{}' conditions failed, but continuing due to allow-dependency-failure", dep_name);
                             println!("{} Dependency '{}' failed but continuing (allow-dependency-failure enabled)", "⚠".yellow(), dep_name.yellow());
+                            // Mark this dependency as failed
+                            failed_dependencies.insert(dep_path.clone());
                             // Continue execution without storing this response
                             continue;
                         } else {
@@ -127,6 +138,8 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     if allow_dependency_failure {
                         log::warn!("⚠ Dependency '{}' request failed, but continuing due to allow-dependency-failure: {}", dep_name, e);
                         println!("{} Dependency '{}' request failed but continuing (allow-dependency-failure enabled): {}", "⚠".yellow(), dep_name.yellow(), e);
+                        // Mark this dependency as failed
+                        failed_dependencies.insert(dep_path.clone());
                         // Continue execution without storing this response
                         continue;
                     } else {

@@ -125,6 +125,8 @@ fn parse_header_with_lines(header_text: &str, file_path: &str, start_line: usize
                 "depends-on" => header.depends_on = Some(value.to_string()),
                 "allow-dependency-failure" => header.allow_dependency_failure = parse_bool(value)
                     .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid boolean value '{}' for allow-dependency-failure", file_path, line_num, value)))?,
+                "show-warnings" => header.show_warnings = parse_bool(value)
+                    .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid boolean value '{}' for show-warnings", file_path, line_num, value)))?,
                 "timeout" => {
                     let timeout_ms: u64 = value.parse()
                         .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid timeout value '{}'", file_path, line_num, value)))?;
@@ -325,6 +327,8 @@ fn parse_header(header_text: &str) -> Result<Header> {
                     header.timeout = Some(Duration::from_millis(timeout_ms));
                 },
                 "allow-dependency-failure" => header.allow_dependency_failure = parse_bool(value)?,
+                "show-warnings" => header.show_warnings = parse_bool(value)
+                    .map_err(|_| GreqError::Parse(format!("Invalid boolean value '{}' for show-warnings", value)))?,
                 _ => log::warn!("Unknown header property: {key}"),
             }
         }
@@ -925,5 +929,36 @@ response-body.database_url equals: postgresql://user:pass@localhost:5432/dbname?
         // Check database URL with credentials and parameters
         let db_condition = &greq_file.footer.conditions[4];
         assert_eq!(db_condition.value, "postgresql://user:pass@localhost:5432/dbname?sslmode=require");
+    }
+
+    #[test]
+    fn test_parse_header_with_show_warnings() {
+        let content = "show-warnings: false\nproject: Test Project\n";
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.show_warnings, false);
+        assert_eq!(header.project, Some("Test Project".to_string()));
+    }
+
+    #[test]
+    fn test_parse_header_show_warnings_default() {
+        let content = "project: Test Project\n";
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.show_warnings, true); // default value
+        assert_eq!(header.project, Some("Test Project".to_string()));
+    }
+
+    #[test]
+    fn test_parse_header_invalid_show_warnings() {
+        let content = "show-warnings: invalid\nproject: Test Project\n";
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid boolean value 'invalid' for show-warnings"));
     }
 }

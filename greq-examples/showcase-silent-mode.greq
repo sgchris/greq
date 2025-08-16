@@ -1,0 +1,15 @@
+project: Showcase New Features - Silent Mode
+is-http: true
+depends-on: showcase-dependency-failure
+allow-dependency-failure: true
+show-warnings: false
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+authorization: Bearer $(dependency.status-code)
+
+====
+
+status-code equals: 200

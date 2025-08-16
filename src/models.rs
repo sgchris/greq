@@ -21,6 +21,7 @@ pub struct Header {
     pub depends_on: Option<String>,
     pub timeout: Option<Duration>,
     pub allow_dependency_failure: bool,
+    pub show_warnings: bool,
 }
 
 /// Content section representing the HTTP request
@@ -112,6 +113,7 @@ impl Default for Header {
             depends_on: None,
             timeout: None,
             allow_dependency_failure: false,
+            show_warnings: true,
         }
     }
 }

@@ -35,6 +35,8 @@ response-body contains: id
 - Supports inheritance, templating, placeholders, and chain of dependencies
 - Environment variable placeholders with `$(environment.VAR_NAME)` syntax
 - Allow dependency failure handling with `allow-dependency-failure` property
+- Configurable warning system with `show-warnings` property
+- Graceful placeholder replacement when dependencies fail
 - Works with JSON, status codes, etc.
 - Built for performance and flexibility
 - Process requests simultaneously
