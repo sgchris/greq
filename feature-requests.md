@@ -40,3 +40,6 @@
     ```
 
 7. Scheduling and repeat. Add property like `repeat-every: 5 minutes`, `repeat-every: 15 seconds`, `repeat-every: 150 milliseconds`
+
+8. Add support for OpenAPI 3.0
+    - Allow to import OpenAPI 3.0 spec and generate Greq file from it
