@@ -264,12 +264,68 @@ fn replace_dependency_placeholders_with_empty_string(
     Ok(result)
 }
 
+/// Validate that dependency placeholders are only used when depends-on is provided
+fn validate_dependency_placeholders(
+    greq_file: &crate::models::GreqFile,
+) -> Result<()> {
+    if greq_file.header.depends_on.is_some() {
+        return Ok(()); // Has dependency, validation passes
+    }
+    
+    let placeholder_regex = regex::Regex::new(r"\$\(([^)]+)\)").unwrap();
+    let file_path = &greq_file.file_path;
+    
+    // Check all text fields for dependency placeholders
+    
+    // Check headers
+    for (header_name, header_value) in &greq_file.content.headers {
+        for cap in placeholder_regex.captures_iter(header_value) {
+            let path = &cap[1];
+            if path.starts_with("dependency.") || path.starts_with("dep.") {
+                return Err(GreqError::Validation(format!(
+                    "{}: header '{}': Dependency placeholder '{}' found but no 'depends-on' is defined",
+                    file_path, header_name, path
+                )));
+            }
+        }
+    }
+    
+    // Check request body
+    if let Some(body) = &greq_file.content.body {
+        for cap in placeholder_regex.captures_iter(body) {
+            let path = &cap[1];
+            if path.starts_with("dependency.") || path.starts_with("dep.") {
+                return Err(GreqError::Validation(format!(
+                    "{}: request body: Dependency placeholder '{}' found but no 'depends-on' is defined",
+                    file_path, path
+                )));
+            }
+        }
+    }
+    
+    // Check URI
+    for cap in placeholder_regex.captures_iter(&greq_file.content.request_line.uri) {
+        let path = &cap[1];
+        if path.starts_with("dependency.") || path.starts_with("dep.") {
+            return Err(GreqError::Validation(format!(
+                "{}: request URI: Dependency placeholder '{}' found but no 'depends-on' is defined",
+                file_path, path
+            )));
+        }
+    }
+    
+    Ok(())
+}
+
 /// Enhanced version that handles dependency failures and shows warnings
 pub fn replace_placeholders_in_greq_file_with_dependency_handling(
     greq_file: &mut crate::models::GreqFile,
     dependency_response: Option<&Response>,
     dependency_failed: bool,
 ) -> Result<()> {
+    // Validate that dependency placeholders are only used when depends-on is provided
+    validate_dependency_placeholders(greq_file)?;
+    
     // Check if we should show warnings and if dependency failure with placeholders should warn
     let should_warn = greq_file.header.show_warnings 
         && greq_file.header.allow_dependency_failure 
@@ -508,7 +564,7 @@ mod tests {
                 },
                 headers: {
                     let mut headers = HashMap::new();
-                    headers.insert("authorization".to_string(), "Bearer $(dependency.nonexistent.token)".to_string());
+                    headers.insert("authorization".to_string(), "Bearer $(nonexistent.token)".to_string());
                     headers
                 },
                 body: None,
@@ -524,7 +580,7 @@ mod tests {
             let error_message = error.to_string();
             assert!(error_message.contains("test-file.greq"));
             assert!(error_message.contains("header 'authorization'"));
-            assert!(error_message.contains("Unknown placeholder path: nonexistent.token"));
+            assert!(error_message.contains("Unknown placeholder path: token"));
         }
     }
 
@@ -677,5 +733,131 @@ mod tests {
         let content = "$(dependency.status-code) and $(dep.response-body.json.id)";
         let result = replace_dependency_placeholders_with_empty_string(content, "test.greq", "header", false);
         assert_eq!(result.unwrap(), " and ");
+    }
+
+    #[test]
+    fn test_dependency_placeholder_validation_without_depends_on() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                depends_on: None, // No dependency defined
+                allow_dependency_failure: false,
+                show_warnings: true,
+                timeout: None,
+                number_of_retries: 0,
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/test".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: {
+                    let mut headers = HashMap::new();
+                    headers.insert("authorization".to_string(), "Bearer $(dependency.token)".to_string());
+                    headers
+                },
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "test-file.greq".to_string(),
+        };
+
+        let result = replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, false);
+        
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Dependency placeholder 'dependency.token' found but no 'depends-on' is defined"));
+    }
+
+    #[test]
+    fn test_dep_prefix_validation_without_depends_on() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                depends_on: None, // No dependency defined
+                allow_dependency_failure: false,
+                show_warnings: true,
+                timeout: None,
+                number_of_retries: 0,
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "POST".to_string(),
+                    uri: "/users/$(dep.response-body.id)".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: HashMap::new(),
+                body: Some("{}".to_string()),
+            },
+            footer: Footer::default(),
+            file_path: "test-file.greq".to_string(),
+        };
+
+        let result = replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, false);
+        
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Dependency placeholder 'dep.response-body.id' found but no 'depends-on' is defined"));
+    }
+
+    #[test]
+    fn test_dependency_placeholder_validation_with_depends_on() {
+        use std::collections::HashMap;
+        use crate::models::{GreqFile, Header, Content, RequestLine, Footer};
+
+        let mut greq_file = GreqFile {
+            header: Header {
+                project: Some("Test".to_string()),
+                is_http: true,
+                delimiter: "====".to_string(),
+                extends: None,
+                depends_on: Some("dependency.greq".to_string()), // Has dependency
+                allow_dependency_failure: false,
+                show_warnings: true,
+                timeout: None,
+                number_of_retries: 0,
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/test".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: {
+                    let mut headers = HashMap::new();
+                    headers.insert("authorization".to_string(), "Bearer $(dependency.response-body.token)".to_string());
+                    headers
+                },
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "test-file.greq".to_string(),
+        };
+
+        // Create a dummy response
+        let dummy_response = Response {
+            status_code: 200,
+            headers: HashMap::new(),
+            body: r#"{"token": "abc123"}"#.to_string(),
+            latency: std::time::Duration::from_millis(100),
+        };
+
+        let result = replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, Some(&dummy_response), false);
+        
+        // Should succeed because depends_on is defined
+        assert!(result.is_ok());
     }
 }

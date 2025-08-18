@@ -1,0 +1,13 @@
+project: Test With Valid Dependency
+depends-on: 01-simple-get.greq
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+x-dependency-status: $(dependency.status-code)
+
+====
+
+status-code equals: 200
