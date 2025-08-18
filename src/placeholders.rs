@@ -248,7 +248,7 @@ fn replace_dependency_placeholders_with_empty_string(
         let placeholder = cap.as_str();
         let path = &placeholder[2..placeholder.len()-1]; // Remove $( and )
         
-        if path.starts_with("dependency.") {
+        if path.starts_with("dependency.") || path.starts_with("dep.") {
             // Replace dependency placeholder with empty string
             result = result.replace(placeholder, "");
         } else if path.starts_with("environment.") {
@@ -663,5 +663,19 @@ mod tests {
         // Dependency placeholder should still be replaced with empty string
         assert_eq!(greq_file.content.headers.get("authorization"), Some(&"Bearer ".to_string()));
         // No warning should be logged (we can't easily test log output, but function should complete without error)
+    }
+
+    #[test]
+    fn test_dep_prefix_replacement() {
+        let content = "Authorization: Bearer $(dep.response-body.json.token)";
+        let result = replace_dependency_placeholders_with_empty_string(content, "test.greq", "header", false);
+        assert_eq!(result.unwrap(), "Authorization: Bearer ");
+    }
+
+    #[test]
+    fn test_mixed_dependency_prefixes() {
+        let content = "$(dependency.status-code) and $(dep.response-body.json.id)";
+        let result = replace_dependency_placeholders_with_empty_string(content, "test.greq", "header", false);
+        assert_eq!(result.unwrap(), " and ");
     }
 }

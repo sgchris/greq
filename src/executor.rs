@@ -33,9 +33,11 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         greq_file = resolve_extends_chain(greq_file, &dep_path)?;
         
         // Check if the dependency this file depends on has failed
-        let dependency_failed = if let Some(depends_on) = &greq_file.header.depends_on {
+        let dependency_failed = if let Some(depends_on) = &greq_file.header.depends_on {    
             let dep_response_path = resolve_file_path(&dep_path, depends_on);
-            failed_dependencies.contains(&dep_response_path)
+            let failed = failed_dependencies.contains(&dep_response_path);
+            log::debug!("The file depends on {depends_on:?}. Dependency failed: {failed:?}");
+            failed
         } else {
             false
         };
@@ -44,8 +46,19 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         if let Some(depends_on) = &greq_file.header.depends_on {
             let dep_response_path = resolve_file_path(&dep_path, depends_on);
             if let Some(dep_response) = dependency_responses.get(&dep_response_path) {
-                replace_placeholders_in_greq_file(&mut greq_file, dep_response)?;
+                log::debug!("Dependency response exists for: {dep_response_path:?}");
+                // Even if we have a response, check if the dependency failed
+                if dependency_failed && greq_file.header.allow_dependency_failure {
+                    // Use enhanced replacement that handles dependency failures
+                    replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, Some(dep_response), dependency_failed)?;
+                } else {
+                    // Normal replacement with dependency response
+                    replace_placeholders_in_greq_file(&mut greq_file, dep_response)?;
+                }
             } else {
+                log::debug!("No dependency response found for: {dep_response_path:?}");
+                // TODO: replace placeholders with empty strings!!!
+                //
                 // Use enhanced replacement that handles dependency failures
                 replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, dependency_failed)?;
             }

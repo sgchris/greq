@@ -1,0 +1,15 @@
+project: Test With Dependency Placeholder
+depends-on: dependency.greq
+allow-dependency-failure: true
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+x-dependency-id: $(dependency.response-body.json.id)
+x-dep-id: $(dep.response-body.json.id)
+
+====
+
+status-code equals: 200
