@@ -1,0 +1,14 @@
+project: Test With Successful Dependency
+depends-on: success-dependency.greq
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+x-dependency-status: $(dependency.status-code)
+x-dependency-origin: $(dependency.response-body.origin)
+
+====
+
+status-code equals: 200

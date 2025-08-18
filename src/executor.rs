@@ -42,12 +42,14 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
             false
         };
         
-        // Replace placeholders - first environment variables, then dependency placeholders if available
+        // Replace placeholders only after ensuring dependency was processed
         if let Some(depends_on) = &greq_file.header.depends_on {
             let dep_response_path = resolve_file_path(&dep_path, depends_on);
+            
+            // Check if dependency was processed and has a response
             if let Some(dep_response) = dependency_responses.get(&dep_response_path) {
                 log::debug!("Dependency response exists for: {dep_response_path:?}");
-                // Even if we have a response, check if the dependency failed
+                // Check if the dependency failed but we allow failure
                 if dependency_failed && greq_file.header.allow_dependency_failure {
                     // Use enhanced replacement that handles dependency failures
                     replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, Some(dep_response), dependency_failed)?;
@@ -55,12 +57,17 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     // Normal replacement with dependency response
                     replace_placeholders_in_greq_file(&mut greq_file, dep_response)?;
                 }
-            } else {
-                log::debug!("No dependency response found for: {dep_response_path:?}");
-                // TODO: replace placeholders with empty strings!!!
-                //
+            } else if dependency_failed && greq_file.header.allow_dependency_failure {
+                log::debug!("Dependency failed and no response available, replacing placeholders with empty strings");
                 // Use enhanced replacement that handles dependency failures
                 replace_placeholders_in_greq_file_with_dependency_handling(&mut greq_file, None, dependency_failed)?;
+            } else {
+                // Dependency should have been processed but wasn't found - this is an error
+                return Err(GreqError::Dependency(format!(
+                    "Dependency '{}' was not processed before file '{}'", 
+                    depends_on,
+                    dep_path.display()
+                )));
             }
         } else {
             // Replace only environment placeholders (no dependencies)
@@ -220,44 +227,55 @@ fn resolve_extends_chain(mut greq_file: GreqFile, current_file_path: &Path) -> R
 fn resolve_dependency_chain<P: AsRef<Path>>(file_path: P) -> Result<Vec<PathBuf>> {
     let mut chain = Vec::new();
     let mut visited = HashSet::new();
-    let mut to_visit = vec![file_path.as_ref().to_path_buf()];
     
-    // Build the dependency tree
-    while let Some(current_path) = to_visit.pop() {
+    // Use recursive DFS to build dependency chain in correct order
+    fn visit_dependency<P: AsRef<Path>>(
+        current_path: P,
+        chain: &mut Vec<PathBuf>,
+        visited: &mut HashSet<PathBuf>,
+        visiting: &mut HashSet<PathBuf>
+    ) -> Result<()> {
+        let current_path = current_path.as_ref().to_path_buf();
         let canonical_path = current_path.canonicalize()
             .unwrap_or_else(|_| current_path.clone());
-            
-        if visited.contains(&canonical_path) {
-            continue; // Skip already processed files
+        
+        // Check for circular dependencies
+        if visiting.contains(&canonical_path) {
+            return Err(GreqError::Parse(format!(
+                "Circular dependency detected involving: {}", 
+                current_path.display()
+            )));
         }
         
-        visited.insert(canonical_path.clone());
+        // Skip if already processed
+        if visited.contains(&canonical_path) {
+            return Ok(());
+        }
+        
+        visiting.insert(canonical_path.clone());
         
         // Parse the file to check for dependencies
         let greq_file = parse_greq_file(&current_path)?;
         
+        // First, process dependency if it exists
         if let Some(depends_on) = &greq_file.header.depends_on {
             let dep_path = resolve_file_path(&current_path, depends_on);
-            let dep_canonical = dep_path.canonicalize()
-                .unwrap_or_else(|_| dep_path.clone());
-                
-            // Check for circular dependencies
-            if visited.contains(&dep_canonical) || to_visit.contains(&dep_canonical) {
-                return Err(GreqError::Parse(format!(
-                    "Circular dependency detected: {} -> {}", 
-                    current_path.display(), 
-                    dep_path.display()
-                )));
-            }
-            
-            to_visit.push(dep_path);
+            visit_dependency(dep_path, chain, visited, visiting)?;
         }
         
-        chain.push(current_path);
+        // Then add current file to chain
+        if !visited.contains(&canonical_path) {
+            chain.push(current_path.clone());
+            visited.insert(canonical_path.clone());
+        }
+        
+        visiting.remove(&canonical_path);
+        Ok(())
     }
     
-    // Reverse to get execution order (dependencies first)
-    chain.reverse();
+    let mut visiting = HashSet::new();
+    visit_dependency(file_path, &mut chain, &mut visited, &mut visiting)?;
+    
     Ok(chain)
 }
 
@@ -461,5 +479,54 @@ mod tests {
         
         // For now, just check that we get some result
         assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_dependency_chain_ordering() {
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        
+        // Create root file (no dependencies)
+        let root_path = dir.path().join("root.greq");
+        fs::write(&root_path, "project: root\n====\nGET /\nhost: example.com\n====\nstatus-code equals: 200").unwrap();
+        
+        // Create middle file (depends on root)
+        let middle_path = dir.path().join("middle.greq");
+        fs::write(&middle_path, "project: middle\ndepends-on: root.greq\n====\nGET /\nhost: example.com\n====\nstatus-code equals: 200").unwrap();
+        
+        // Create final file (depends on middle)
+        let final_path = dir.path().join("final.greq");
+        fs::write(&final_path, "project: final\ndepends-on: middle.greq\n====\nGET /\nhost: example.com\n====\nstatus-code equals: 200").unwrap();
+        
+        // Resolve dependency chain
+        let chain = resolve_dependency_chain(&final_path).unwrap();
+        
+        // Verify execution order: root -> middle -> final
+        assert_eq!(chain.len(), 3);
+        assert!(chain[0].file_name().unwrap().to_str().unwrap() == "root.greq");
+        assert!(chain[1].file_name().unwrap().to_str().unwrap() == "middle.greq");
+        assert!(chain[2].file_name().unwrap().to_str().unwrap() == "final.greq");
+    }
+
+    #[test]
+    fn test_circular_dependency_detection() {
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        
+        // Create files with circular dependency: a -> b -> a
+        let a_path = dir.path().join("a.greq");
+        fs::write(&a_path, "project: a\ndepends-on: b.greq\n====\nGET /\nhost: example.com\n====\nstatus-code equals: 200").unwrap();
+        
+        let b_path = dir.path().join("b.greq");
+        fs::write(&b_path, "project: b\ndepends-on: a.greq\n====\nGET /\nhost: example.com\n====\nstatus-code equals: 200").unwrap();
+        
+        // Should detect circular dependency
+        let result = resolve_dependency_chain(&a_path);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(e.to_string().contains("Circular dependency"));
+        }
     }
 }

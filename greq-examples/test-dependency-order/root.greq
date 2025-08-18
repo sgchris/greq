@@ -1,0 +1,11 @@
+project: Root Dependency
+is-http: true
+
+====
+
+GET /uuid HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

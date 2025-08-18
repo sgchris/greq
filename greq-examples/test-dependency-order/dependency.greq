@@ -1,0 +1,11 @@
+project: Dependency Test (Will Fail)
+is-http: true
+
+====
+
+GET /status/500 HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

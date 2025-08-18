@@ -1,0 +1,13 @@
+project: Final Test
+depends-on: middle.greq
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+x-middle-status: $(dependency.status-code)
+
+====
+
+status-code equals: 200

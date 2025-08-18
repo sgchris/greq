@@ -1,0 +1,15 @@
+project: Main Test (Uses Dependency)
+depends-on: dependency.greq
+allow-dependency-failure: true
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+x-dependency-status: $(dependency.status-code)
+x-dependency-id: $(dependency.response-body.json.id)
+
+====
+
+status-code equals: 200
