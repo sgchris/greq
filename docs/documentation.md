@@ -48,7 +48,7 @@ condition: value
 | `delimiter` | Section separator character | `delimiter: $` | `=` |
 | `extends` | Base file to inherit from | `extends: base-config.greq` | None |
 | `depends-on` | File to execute first | `depends-on: auth-setup.greq` | None |
-| `allow-dependency-failure` | Continue if dependency fails | `allow-dependency-failure: true` | `false` |
+| `allow-dependency-failure` | Continue if dependency fails | `allow-dependency-failure: false` | `true` |
 | `show-warnings` | Show warning messages during execution | `show-warnings: false` | `true` |
 | `timeout` | Request timeout in milliseconds | `timeout: 5000` | `30000` |
 | `number-of-retries` | Retry attempts on failure | `number-of-retries: 3` | `0` |
@@ -62,7 +62,7 @@ Inherits configuration from another `.greq` file. The base file's header and con
 Executes another test file before this one and makes its response available for placeholder replacement. Can reference files with or without `.greq` extension.
 
 #### `allow-dependency-failure`
-When set to `true`, allows the current test to continue executing even if the dependency defined by `depends-on` fails. This property can only be used when `depends-on` is also defined. Useful for scenarios like cleanup operations that may fail if the resource doesn't exist.
+When set to `false`, stops execution if the dependency defined by `depends-on` fails. By default (`true`), allows the current test to continue executing even if dependencies fail. Useful for robust test workflows where dependencies might legitimately fail.
 
 #### `show-warnings`
 Controls whether warning messages are displayed during execution. When set to `false`, suppresses warnings such as placeholder replacement notifications when dependencies fail. Default is `true`.
@@ -254,7 +254,7 @@ status-code equals: 200
 
 ## Dependency Failure Handling
 
-By default, if a dependency test fails (either through HTTP errors or failed conditions), the dependent test will also fail. However, you can use `allow-dependency-failure: true` to continue execution even when dependencies fail.
+By default, dependency failures are allowed and execution continues (`allow-dependency-failure: true`). If you want execution to stop when a dependency fails, you can explicitly set `allow-dependency-failure: false`.
 
 ### Use Cases
 

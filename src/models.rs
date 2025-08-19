@@ -112,7 +112,7 @@ impl Default for Header {
             number_of_retries: 0,
             depends_on: None,
             timeout: None,
-            allow_dependency_failure: false,
+            allow_dependency_failure: true, // Changed default to true - allow dependencies to fail by default
             show_warnings: true,
         }
     }

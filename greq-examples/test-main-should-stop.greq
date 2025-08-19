@@ -1,0 +1,13 @@
+project: Main File That Should Stop On Dependency Failure
+depends-on: test-failing-dependency.greq
+allow-dependency-failure: false
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

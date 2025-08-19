@@ -341,14 +341,9 @@ fn parse_header(header_text: &str) -> Result<Header> {
 }
 
 /// Validate header properties for consistency
-fn validate_header(header: &Header) -> Result<()> {
-    // Validate that allow-dependency-failure is only used with depends-on
-    if header.allow_dependency_failure && header.depends_on.is_none() {
-        return Err(GreqError::Validation(
-            "allow-dependency-failure can only be used when depends-on is defined".to_string()
-        ));
-    }
-    
+fn validate_header(_header: &Header) -> Result<()> {
+    // Note: allow-dependency-failure can be true even without depends-on
+    // as it may be inherited or set for future use
     Ok(())
 }
 
@@ -733,8 +728,8 @@ allow-dependency-failure: true
         };
         
         let result = validate_header(&header);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("allow-dependency-failure can only be used when depends-on is defined"));
+        // Should now pass since allow_dependency_failure: true is the default and valid without depends_on
+        assert!(result.is_ok());
     }
     
     #[test]

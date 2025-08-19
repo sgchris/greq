@@ -1,0 +1,11 @@
+project: Failing Dependency Test
+is-http: true
+
+====
+
+GET /status/404 HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

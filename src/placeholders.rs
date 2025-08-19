@@ -141,7 +141,7 @@ fn navigate_json_path_with_context(
             PathPart::Property(key) => {
                 if let Value::Object(obj) = current {
                     current = obj.get(&key)
-                        .ok_or_else(|| GreqError::Placeholder(format!("{}: {}: Property '{}' not found in JSON path '{}'", file_path, location, key, path)))?;
+                        .ok_or_else(|| GreqError::Placeholder(format!("{}: {}: Property '{}' not found in JSON path '{}'. Please check the actual response.", file_path, location, key, path)))?;
                 } else {
                     return Err(GreqError::Placeholder(format!("{}: {}: Cannot access property '{}' on non-object in JSON path '{}'", file_path, location, key, path)));
                 }
