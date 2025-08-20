@@ -4,12 +4,13 @@ use regex::Regex;
 use serde_json::Value;
 
 /// Evaluate all conditions against a response
-pub fn evaluate_conditions(conditions: &[Condition], response: &Response) -> Result<Vec<String>> {
+/// Evaluate conditions against a response with file context for better error reporting
+pub fn evaluate_conditions(conditions: &[Condition], response: &Response, file_path: &str) -> Result<Vec<String>> {
     let mut failed_conditions = Vec::new();
     let condition_groups = group_conditions(conditions);
     
     for group in condition_groups {
-        if let Some(failed_desc) = evaluate_condition_group_with_details(&group, response)? {
+        if let Some(failed_desc) = evaluate_condition_group_with_details(&group, response, file_path)? {
             failed_conditions.push(failed_desc);
         }
     }
@@ -41,11 +42,11 @@ fn group_conditions(conditions: &[Condition]) -> Vec<Vec<&Condition>> {
 }
 
 /// Evaluate a group of conditions (connected by OR) and return failure details if any
-fn evaluate_condition_group_with_details(group: &[&Condition], response: &Response) -> Result<Option<String>> {
+fn evaluate_condition_group_with_details(group: &[&Condition], response: &Response, file_path: &str) -> Result<Option<String>> {
     let mut failed_details = Vec::new();
     
     for condition in group {
-        match evaluate_single_condition_with_details(condition, response)? {
+        match evaluate_single_condition_with_details(condition, response, file_path)? {
             ConditionResult::Passed => return Ok(None), // If any condition passes in OR group, group passes
             ConditionResult::Failed { actual_value, condition } => {
                 failed_details.push(format_failed_condition_with_actual(&condition, &actual_value));
@@ -64,8 +65,8 @@ enum ConditionResult {
 }
 
 /// Evaluate a single condition with detailed results
-fn evaluate_single_condition_with_details(condition: &Condition, response: &Response) -> Result<ConditionResult> {
-    let actual_value = extract_condition_value(&condition.key, response)?;
+fn evaluate_single_condition_with_details(condition: &Condition, response: &Response, file_path: &str) -> Result<ConditionResult> {
+    let actual_value = extract_condition_value(&condition.key, response, file_path)?;
     let expected_value = &condition.value;
     
     log::debug!(
@@ -80,13 +81,13 @@ fn evaluate_single_condition_with_details(condition: &Condition, response: &Resp
         Operator::Equals => compare_equals(&actual_value, expected_value, condition.case_sensitive),
         Operator::Contains => compare_contains(&actual_value, expected_value, condition.case_sensitive),
         Operator::MatchesRegex => compare_regex(&actual_value, expected_value)?,
-        Operator::LessThan => compare_numeric(&actual_value, expected_value, |a, b| a < b)?,
-        Operator::LessThanOrEqual => compare_numeric(&actual_value, expected_value, |a, b| a <= b)?,
-        Operator::GreaterThan => compare_numeric(&actual_value, expected_value, |a, b| a > b)?,
-        Operator::GreaterThanOrEqual => compare_numeric(&actual_value, expected_value, |a, b| a >= b)?,
+        Operator::LessThan => compare_numeric(&actual_value, expected_value, file_path, |a, b| a < b)?,
+        Operator::LessThanOrEqual => compare_numeric(&actual_value, expected_value, file_path, |a, b| a <= b)?,
+        Operator::GreaterThan => compare_numeric(&actual_value, expected_value, file_path, |a, b| a > b)?,
+        Operator::GreaterThanOrEqual => compare_numeric(&actual_value, expected_value, file_path, |a, b| a >= b)?,
         Operator::StartsWith => compare_starts_with(&actual_value, expected_value, condition.case_sensitive),
         Operator::EndsWith => compare_ends_with(&actual_value, expected_value, condition.case_sensitive),
-        Operator::Exists => compare_exists(&actual_value, expected_value)?,
+        Operator::Exists => compare_exists(&actual_value, expected_value, file_path)?,
     };
     
     let final_result = if condition.is_not { !result } else { result };
@@ -106,7 +107,7 @@ fn evaluate_single_condition_with_details(condition: &Condition, response: &Resp
 }
 
 /// Extract the actual value for a condition key from the response
-fn extract_condition_value(key: &ConditionKey, response: &Response) -> Result<String> {
+fn extract_condition_value(key: &ConditionKey, response: &Response, file_path: &str) -> Result<String> {
     match key {
         ConditionKey::StatusCode => Ok(response.status_code.to_string()),
         ConditionKey::Latency => Ok(response.latency.as_millis().to_string()),
@@ -123,17 +124,17 @@ fn extract_condition_value(key: &ConditionKey, response: &Response) -> Result<St
             Ok(response.headers.get(&header_name.to_lowercase()).cloned().unwrap_or_default())
         },
         ConditionKey::ResponseBodyPath(path) => {
-            extract_json_path_value(&response.body, path)
+            extract_json_path_value(&response.body, path, file_path)
         },
     }
 }
 
 /// Extract value from JSON response body using path
-fn extract_json_path_value(json_text: &str, path: &str) -> Result<String> {
+fn extract_json_path_value(json_text: &str, path: &str, file_path: &str) -> Result<String> {
     let value: Value = serde_json::from_str(json_text)
-        .map_err(|_| GreqError::ConditionFailed("Response body is not valid JSON".to_string()))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("{}: Response body is not valid JSON", file_path)))?;
     
-    let result = navigate_json_path(&value, path)?;
+    let result = navigate_json_path(&value, path, file_path)?;
     
     match result {
         Value::String(s) => Ok(s),
@@ -145,26 +146,26 @@ fn extract_json_path_value(json_text: &str, path: &str) -> Result<String> {
 }
 
 /// Navigate JSON path similar to placeholders module
-fn navigate_json_path(value: &Value, path: &str) -> Result<Value> {
+fn navigate_json_path(value: &Value, path: &str, file_path: &str) -> Result<Value> {
     let mut current = value;
-    let parts = parse_json_path(path)?;
+    let parts = parse_json_path(path, file_path)?;
     
     for part in parts {
         match part {
             PathPart::Property(key) => {
                 if let Value::Object(obj) = current {
                     current = obj.get(&key)
-                        .ok_or_else(|| GreqError::ConditionFailed(format!("Property '{key}' not found")))?;
+                        .ok_or_else(|| GreqError::ConditionFailed(format!("{}: Property '{}' not found in JSON path '{}'", file_path, key, path)))?;
                 } else {
-                    return Err(GreqError::ConditionFailed(format!("Cannot access property '{key}' on non-object")));
+                    return Err(GreqError::ConditionFailed(format!("{}: Cannot access property '{}' on non-object in JSON path '{}'", file_path, key, path)));
                 }
             },
             PathPart::Index(index) => {
                 if let Value::Array(arr) = current {
                     current = arr.get(index)
-                        .ok_or_else(|| GreqError::ConditionFailed(format!("Array index {index} out of bounds")))?;
+                        .ok_or_else(|| GreqError::ConditionFailed(format!("{}: Array index {} out of bounds in JSON path '{}'", file_path, index, path)))?;
                 } else {
-                    return Err(GreqError::ConditionFailed(format!("Cannot access index {index} on non-array")));
+                    return Err(GreqError::ConditionFailed(format!("{}: Cannot access index {} on non-array in JSON path '{}'", file_path, index, path)));
                 }
             },
         }
@@ -179,7 +180,7 @@ enum PathPart {
     Index(usize),
 }
 
-fn parse_json_path(path: &str) -> Result<Vec<PathPart>> {
+fn parse_json_path(path: &str, file_path: &str) -> Result<Vec<PathPart>> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut chars = path.chars().peekable();
@@ -207,7 +208,7 @@ fn parse_json_path(path: &str) -> Result<Vec<PathPart>> {
                 }
                 
                 let index: usize = index_str.parse()
-                    .map_err(|_| GreqError::ConditionFailed(format!("Invalid array index: {index_str}")))?;
+                    .map_err(|_| GreqError::ConditionFailed(format!("{}: Invalid array index: {index_str}", file_path)))?;
                 parts.push(PathPart::Index(index));
             },
             _ => {
@@ -245,14 +246,14 @@ fn compare_regex(actual: &str, pattern: &str) -> Result<bool> {
     Ok(regex.is_match(actual))
 }
 
-fn compare_numeric<F>(actual: &str, expected: &str, op: F) -> Result<bool>
+fn compare_numeric<F>(actual: &str, expected: &str, file_path: &str, op: F) -> Result<bool>
 where
     F: Fn(f64, f64) -> bool,
 {
     let actual_num: f64 = actual.parse()
-        .map_err(|_| GreqError::ConditionFailed(format!("Cannot parse '{actual}' as number")))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("{}: Cannot parse '{actual}' as number", file_path)))?;
     let expected_num: f64 = expected.parse()
-        .map_err(|_| GreqError::ConditionFailed(format!("Cannot parse '{expected}' as number")))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("{}: Cannot parse '{expected}' as number", file_path)))?;
     
     Ok(op(actual_num, expected_num))
 }
@@ -273,9 +274,9 @@ fn compare_ends_with(actual: &str, expected: &str, case_sensitive: bool) -> bool
     }
 }
 
-fn compare_exists(actual: &str, expected: &str) -> Result<bool> {
+fn compare_exists(actual: &str, expected: &str, file_path: &str) -> Result<bool> {
     let expected_exists: bool = expected.parse()
-        .map_err(|_| GreqError::ConditionFailed(format!("Invalid boolean value for exists: {expected}")))?;
+        .map_err(|_| GreqError::ConditionFailed(format!("{}: Invalid boolean value for exists: {expected}", file_path)))?;
     
     let actual_exists = !actual.is_empty();
     Ok(actual_exists == expected_exists)
@@ -336,7 +337,7 @@ mod tests {
     
     // Helper function for tests to get just the boolean result
     fn evaluate_single_condition_test(condition: &Condition, response: &Response) -> Result<bool> {
-        match evaluate_single_condition_with_details(condition, response)? {
+        match evaluate_single_condition_with_details(condition, response, "test-file.greq")? {
             ConditionResult::Passed => Ok(true),
             ConditionResult::Failed { .. } => Ok(false),
         }

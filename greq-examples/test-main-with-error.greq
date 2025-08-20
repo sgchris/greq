@@ -1,0 +1,13 @@
+project: Main File With Error In Condition
+depends-on: test-dependency.greq
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
+response-body.missing.field equals: "test"

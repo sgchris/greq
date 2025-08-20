@@ -1,0 +1,12 @@
+project: Test File Context In Errors
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
+response-body.nonexistent.property equals: "test"

@@ -13,10 +13,6 @@ use colored::*;
 pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<ExecutionResult> {
     let file_path = file_path.as_ref();
     
-    // Parse the main file to check allow_dependency_failure setting
-    let main_greq_file = parse_greq_file(file_path)?;
-    let allow_dependency_failure = main_greq_file.header.allow_dependency_failure;
-    
     // Resolve the full dependency chain
     let dependency_chain = resolve_dependency_chain(file_path)?;
     
@@ -24,7 +20,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
     let mut dependency_responses: HashMap<PathBuf, Response> = HashMap::new();
     let mut failed_dependencies: HashSet<PathBuf> = HashSet::new();
     
-    for dep_path in dependency_chain {
+    for dep_path in &dependency_chain {
         log::info!("Executing greq file: {dep_path:?}");
         
         let mut greq_file = parse_greq_file(&dep_path)?;
@@ -78,7 +74,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         match execute_http_request(&greq_file).await {
             Ok(response) => {
                 // Evaluate conditions
-                let failed_conditions = evaluate_conditions(&greq_file.footer.conditions, &response)?;
+                let failed_conditions = evaluate_conditions(&greq_file.footer.conditions, &response, &greq_file.file_path)?;
                 
                 if !failed_conditions.is_empty() {
                     let dep_name = dep_path.file_name()
@@ -96,21 +92,39 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                         });
                     } else {
                         // This is a dependency failing
-                        if allow_dependency_failure {
-                            log::warn!("⚠ Dependency '{}' conditions failed, but continuing due to allow-dependency-failure", dep_name);
-                            println!("{} Dependency '{}' failed but continuing (allow-dependency-failure enabled)", "⚠".yellow(), dep_name.yellow());
-                            // Mark this dependency as failed
-                            failed_dependencies.insert(dep_path.clone());
-                            // Continue execution without storing this response
-                            continue;
-                        } else {
+                        // Check if any files that depend on this failed dependency disallow dependency failure
+                        let mut should_fail = false;
+                        let mut blocking_file = String::new();
+                        
+                        // Check all remaining files in the chain to see if they depend on this failed dependency
+                        // and don't allow dependency failure
+                        for remaining_dep_path in dependency_chain.iter().skip_while(|p| *p != dep_path).skip(1) {
+                            let remaining_greq_file = parse_greq_file(remaining_dep_path)?;
+                            if let Some(depends_on) = &remaining_greq_file.header.depends_on {
+                                let dep_response_path = resolve_file_path(remaining_dep_path, depends_on);
+                                if dep_response_path == *dep_path && !remaining_greq_file.header.allow_dependency_failure {
+                                    should_fail = true;
+                                    blocking_file = remaining_dep_path.display().to_string();
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if should_fail {
                             return Ok(ExecutionResult {
                                 file_path: file_path.display().to_string(),
                                 success: false,
                                 response: None,
                                 failed_conditions: vec![format!("Dependency '{}' conditions failed", dep_name)],
-                                error: Some(format!("Dependency '{}' failed: {}", dep_name, failed_conditions.join(", "))),
+                                error: Some(format!("Dependency '{}' failed: {}. File '{}' does not allow dependency failure.", dep_name, failed_conditions.join(", "), blocking_file)),
                             });
+                        } else {
+                            log::warn!("⚠ Dependency '{}' conditions failed, but continuing because all dependent files allow dependency failure", dep_name);
+                            println!("{} Dependency '{}' failed but continuing (dependency failure allowed by all dependent files)", "⚠".yellow(), dep_name.yellow());
+                            // Mark this dependency as failed
+                            failed_dependencies.insert(dep_path.clone());
+                            // Continue execution without storing this response
+                            continue;
                         }
                     }
                 }
@@ -155,21 +169,39 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
                     });
                 } else {
                     // This is a dependency failing
-                    if allow_dependency_failure {
-                        log::warn!("⚠ Dependency '{}' request failed, but continuing due to allow-dependency-failure: {}", dep_name, e);
-                        println!("{} Dependency '{}' request failed but continuing (allow-dependency-failure enabled): {}", "⚠".yellow(), dep_name.yellow(), e);
-                        // Mark this dependency as failed
-                        failed_dependencies.insert(dep_path.clone());
-                        // Continue execution without storing this response
-                        continue;
-                    } else {
+                    // Check if any files that depend on this failed dependency disallow dependency failure
+                    let mut should_fail = false;
+                    let mut blocking_file = String::new();
+                    
+                    // Check all remaining files in the chain to see if they depend on this failed dependency
+                    // and don't allow dependency failure
+                    for remaining_dep_path in dependency_chain.iter().skip_while(|p| *p != dep_path).skip(1) {
+                        let remaining_greq_file = parse_greq_file(remaining_dep_path)?;
+                        if let Some(depends_on) = &remaining_greq_file.header.depends_on {
+                            let dep_response_path = resolve_file_path(remaining_dep_path, depends_on);
+                            if dep_response_path == *dep_path && !remaining_greq_file.header.allow_dependency_failure {
+                                should_fail = true;
+                                blocking_file = remaining_dep_path.display().to_string();
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if should_fail {
                         return Ok(ExecutionResult {
                             file_path: file_path.display().to_string(),
                             success: false,
                             response: None,
                             failed_conditions: Vec::new(),
-                            error: Some(format!("Dependency '{}' request failed: {e}", dep_name)),
+                            error: Some(format!("Dependency '{}' request failed: {}. File '{}' does not allow dependency failure.", dep_name, e, blocking_file)),
                         });
+                    } else {
+                        log::warn!("⚠ Dependency '{}' request failed, but continuing because all dependent files allow dependency failure: {}", dep_name, e);
+                        println!("{} Dependency '{}' request failed but continuing (dependency failure allowed by all dependent files): {}", "⚠".yellow(), dep_name.yellow(), e);
+                        // Mark this dependency as failed
+                        failed_dependencies.insert(dep_path.clone());
+                        // Continue execution without storing this response
+                        continue;
                     }
                 }
             }

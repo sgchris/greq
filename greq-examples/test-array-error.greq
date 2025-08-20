@@ -1,0 +1,12 @@
+project: Test Array Index Error
+is-http: true
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
+response-body.args[5] equals: "test"
