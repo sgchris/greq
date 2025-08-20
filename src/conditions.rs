@@ -5,17 +5,18 @@ use serde_json::Value;
 
 /// Evaluate all conditions against a response
 /// Evaluate conditions against a response with file context for better error reporting
+/// Stops at the first failing condition to preserve evaluation order
 pub fn evaluate_conditions(conditions: &[Condition], response: &Response, file_path: &str) -> Result<Vec<String>> {
-    let mut failed_conditions = Vec::new();
     let condition_groups = group_conditions(conditions);
     
     for group in condition_groups {
         if let Some(failed_desc) = evaluate_condition_group_with_details(&group, response, file_path)? {
-            failed_conditions.push(failed_desc);
+            // Return immediately on first failure to preserve order
+            return Ok(vec![failed_desc]);
         }
     }
     
-    Ok(failed_conditions)
+    Ok(Vec::new())
 }
 
 /// Group conditions by OR relationships
@@ -42,20 +43,24 @@ fn group_conditions(conditions: &[Condition]) -> Vec<Vec<&Condition>> {
 }
 
 /// Evaluate a group of conditions (connected by OR) and return failure details if any
+/// Shows error from the first condition in the group if all conditions fail
 fn evaluate_condition_group_with_details(group: &[&Condition], response: &Response, file_path: &str) -> Result<Option<String>> {
-    let mut failed_details = Vec::new();
+    let mut first_failure: Option<String> = None;
     
     for condition in group {
         match evaluate_single_condition_with_details(condition, response, file_path)? {
             ConditionResult::Passed => return Ok(None), // If any condition passes in OR group, group passes
             ConditionResult::Failed { actual_value, condition } => {
-                failed_details.push(format_failed_condition_with_actual(&condition, &actual_value));
+                // Store only the first failure
+                if first_failure.is_none() {
+                    first_failure = Some(format_failed_condition_with_actual(&condition, &actual_value));
+                }
             }
         }
     }
     
-    // All conditions failed, format them
-    Ok(Some(failed_details.join(" OR ")))
+    // All conditions failed, return the first failure
+    Ok(first_failure)
 }
 
 #[derive(Debug)]
