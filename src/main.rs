@@ -49,7 +49,7 @@ async fn main() {
     }
     
     // Execute files
-    match execute_multiple_greq_files(&cli.files).await {
+    match execute_multiple_greq_files(&cli.files, cli.verbose).await {
         Ok(results) => {
             print_execution_results(&results);
             

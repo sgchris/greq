@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use colored::*;
 
 /// Execute a single Greq file with dependency resolution
-pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<ExecutionResult> {
+pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P, verbose: bool) -> Result<ExecutionResult> {
     let file_path = file_path.as_ref();
     
     // Resolve the full dependency chain
@@ -73,6 +73,11 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P) -> Result<Execution
         // Execute the HTTP request
         match execute_http_request(&greq_file).await {
             Ok(response) => {
+                // Print verbose response details if verbose flag is enabled
+                if verbose {
+                    print_verbose_response(&dep_path, &response);
+                }
+                
                 // Evaluate conditions
                 let failed_conditions = evaluate_conditions(&greq_file.footer.conditions, &response, &greq_file.file_path)?;
                 
@@ -408,7 +413,7 @@ async fn execute_http_request(greq_file: &GreqFile) -> Result<Response> {
 }
 
 /// Execute multiple Greq files in parallel
-pub async fn execute_multiple_greq_files<P: AsRef<Path>>(file_paths: &[P]) -> Result<Vec<ExecutionResult>> {
+pub async fn execute_multiple_greq_files<P: AsRef<Path>>(file_paths: &[P], verbose: bool) -> Result<Vec<ExecutionResult>> {
     log::info!("Executing {} greq files in parallel", file_paths.len());
     
     let mut handles = Vec::new();
@@ -416,7 +421,7 @@ pub async fn execute_multiple_greq_files<P: AsRef<Path>>(file_paths: &[P]) -> Re
     for file_path in file_paths {
         let path = file_path.as_ref().to_path_buf();
         let handle = tokio::spawn(async move {
-            execute_greq_file(path).await
+            execute_greq_file(path, verbose).await
         });
         handles.push(handle);
     }
@@ -485,6 +490,51 @@ pub fn all_successful(results: &[ExecutionResult]) -> bool {
     results.iter().all(|r| r.success)
 }
 
+/// Print verbose response details for dependency chain
+fn print_verbose_response(file_path: &std::path::Path, response: &Response) {
+    use colored::*;
+    
+    let file_name = file_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    
+    println!("\n{} {}", "📄 Response for:".bold().cyan(), file_name.yellow());
+    println!("{} {}", "Status Code:".bold(), format!("{}", response.status_code).green());
+    println!("{} {}ms", "Response Time:".bold(), response.latency.as_millis().to_string().blue());
+    
+    // Print headers
+    if !response.headers.is_empty() {
+        println!("{}", "Headers:".bold());
+        for (key, value) in &response.headers {
+            println!("  {}: {}", key.cyan(), value);
+        }
+    }
+    
+    // Print response body
+    println!("{}", "Response Body:".bold());
+    if response.body.trim().is_empty() {
+        println!("  {}", "(empty)".italic().dimmed());
+    } else {
+        // Try to pretty-print JSON, otherwise print as-is
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&response.body) {
+            if let Ok(pretty_json) = serde_json::to_string_pretty(&json_value) {
+                // Indent each line for better formatting
+                for line in pretty_json.lines() {
+                    println!("  {}", line);
+                }
+            } else {
+                println!("  {}", response.body);
+            }
+        } else {
+            // Not JSON, print as-is with indentation
+            for line in response.body.lines() {
+                println!("  {}", line);
+            }
+        }
+    }
+    println!("{}", "-".repeat(50).dimmed());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -506,7 +556,7 @@ mod tests {
         let written_content = fs::read_to_string(&file_path).unwrap();
         println!("File content: {written_content:?}");
         
-        let result = execute_greq_file(&file_path).await;
+        let result = execute_greq_file(&file_path, false).await;
         println!("Result: {result:?}");
         
         // For now, just check that we get some result
