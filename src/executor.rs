@@ -71,7 +71,7 @@ pub async fn execute_greq_file<P: AsRef<Path>>(file_path: P, verbose: bool) -> R
         }
         
         // Execute the HTTP request
-        match execute_http_request(&greq_file).await {
+        match execute_http_request(&greq_file, verbose).await {
             Ok(response) => {
                 // Print verbose response details if verbose flag is enabled
                 if verbose {
@@ -317,7 +317,7 @@ fn resolve_dependency_chain<P: AsRef<Path>>(file_path: P) -> Result<Vec<PathBuf>
 }
 
 /// Execute the HTTP request for a GreqFile
-async fn execute_http_request(greq_file: &GreqFile) -> Result<Response> {
+async fn execute_http_request(greq_file: &GreqFile, verbose: bool) -> Result<Response> {
     let client = Client::new();
     let start_time = Instant::now();
     
@@ -355,6 +355,11 @@ async fn execute_http_request(greq_file: &GreqFile) -> Result<Response> {
     // Set timeout
     if let Some(timeout) = greq_file.header.timeout {
         request_builder = request_builder.timeout(timeout);
+    }
+
+    // Print verbose request details if verbose flag is enabled
+    if verbose {
+        print_verbose_request(greq_file, &url);
     }
     
     // Execute request with retries
@@ -488,6 +493,70 @@ pub fn print_execution_results(results: &[ExecutionResult]) {
 /// Check if all results are successful
 pub fn all_successful(results: &[ExecutionResult]) -> bool {
     results.iter().all(|r| r.success)
+}
+
+/// Print verbose request details for dependency chain
+fn print_verbose_request(greq_file: &GreqFile, url: &str) {
+    use colored::*;
+    
+    let file_name = std::path::Path::new(&greq_file.file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    
+    println!("\n{} {}", "📤 Request from:".bold().green(), file_name.yellow());
+    
+    // Print request line
+    let version = if greq_file.content.request_line.version.is_empty() {
+        "HTTP/1.1"
+    } else {
+        &greq_file.content.request_line.version
+    };
+    println!("{} {} {} {}", 
+        "Method:".bold(), 
+        greq_file.content.request_line.method.blue(),
+        greq_file.content.request_line.uri.cyan(),
+        version.dimmed()
+    );
+    
+    println!("{} {}", "URL:".bold(), url.cyan());
+    
+    // Print headers
+    if !greq_file.content.headers.is_empty() {
+        println!("{}", "Headers:".bold());
+        for (key, value) in &greq_file.content.headers {
+            println!("  {}: {}", key.cyan(), value);
+        }
+    }
+    
+    // Print request body
+    if let Some(body) = &greq_file.content.body {
+        println!("{}", "Request Body:".bold());
+        if body.trim().is_empty() {
+            println!("  {}", "(empty)".italic().dimmed());
+        } else {
+            // Try to pretty-print JSON, otherwise print as-is
+            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
+                if let Ok(pretty_json) = serde_json::to_string_pretty(&json_value) {
+                    // Indent each line for better formatting
+                    for line in pretty_json.lines() {
+                        println!("  {}", line);
+                    }
+                } else {
+                    println!("  {}", body);
+                }
+            } else {
+                // Not JSON, print as-is with indentation
+                for line in body.lines() {
+                    println!("  {}", line);
+                }
+            }
+        }
+    } else {
+        println!("{}", "Request Body:".bold());
+        println!("  {}", "(none)".italic().dimmed());
+    }
+    println!("{}", "=".repeat(50).blue());
 }
 
 /// Print verbose response details for dependency chain
