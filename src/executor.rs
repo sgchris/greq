@@ -431,12 +431,13 @@ async fn execute_http_request(greq_file: &GreqFile, verbose: bool) -> Result<Res
             );
         }
 
-        match request_builder
+        let response_result = request_builder
             .try_clone()
             .ok_or_else(|| GreqError::Validation("Failed to clone request".to_string()))?
             .send()
-            .await
-        {
+            .await;
+
+        match response_result {
             Ok(response) => {
                 let latency = start_time.elapsed();
                 let status_code = response.status().as_u16();
@@ -474,6 +475,9 @@ async fn execute_http_request(greq_file: &GreqFile, verbose: bool) -> Result<Res
                 // Print verbose error details if verbose flag is enabled
                 if verbose {
                     print_verbose_error(greq_file, &e, attempt as usize, max_retries as usize);
+                    
+                    // Additionally, for network-level errors, try to provide raw debugging info
+                    print_raw_debug_info(greq_file);
                 }
                 
                 last_error = Some(e);
@@ -809,7 +813,21 @@ fn print_detailed_error_info(error: &reqwest::Error) {
     // Check for source error (underlying cause)
     if let Some(source) = error.source() {
         println!("{} {}", "Underlying Cause:".bold(), source.to_string().yellow());
+        
+        // Try to extract more details from the error chain
+        let mut current_source = source.source();
+        let mut depth = 1;
+        while let Some(deeper_source) = current_source {
+            if depth <= 3 { // Limit depth to avoid too much nesting
+                println!("{} {}", format!("  Cause {}:", depth).bold(), deeper_source.to_string().yellow());
+            }
+            current_source = deeper_source.source();
+            depth += 1;
+        }
     }
+    
+    // Show the full error debug representation for maximum detail
+    println!("{} {:?}", "Full Error Debug:".bold(), error);
     
     // Additional error context based on error type
     if error.is_timeout() {
@@ -819,9 +837,74 @@ fn print_detailed_error_info(error: &reqwest::Error) {
         println!("{} Check firewall settings and network connectivity", "💡 Hint:".bold().blue());
     } else if error.is_request() {
         println!("{} Check request headers, body format, or HTTP method", "💡 Hint:".bold().blue());
+        println!("{} This might be due to invalid JSON, malformed headers, or unsupported content-type", "💡 Hint:".bold().blue());
     } else if error.is_decode() {
         println!("{} Server may have returned unexpected content type or malformed data", "💡 Hint:".bold().blue());
     }
+}
+
+/// Print raw debugging information for failed requests
+fn print_raw_debug_info(greq_file: &GreqFile) {
+    use colored::*;
+    
+    println!("\n{}", "🔍 Raw Request Debug Information".bold().blue());
+    println!("{}", "=".repeat(40).blue());
+    
+    // Show raw request details
+    println!("{} {}", "File:".bold(), greq_file.file_path.cyan());
+    
+    // Show request line details
+    println!("{} {}", "Method:".bold(), greq_file.content.request_line.method.cyan());
+    println!("{} {}", "URI:".bold(), greq_file.content.request_line.uri.cyan());
+    println!("{} {}", "HTTP Version:".bold(), greq_file.content.request_line.version.cyan());
+    
+    // Show computed host and URL
+    if let Some(host) = greq_file.content.headers.get("host") {
+        let scheme = if greq_file.header.is_http { "http" } else { "https" };
+        let url = format!("{}://{}{}", 
+            scheme, 
+            host, 
+            greq_file.content.request_line.uri
+        );
+        println!("{} {}", "Computed URL:".bold(), url.cyan());
+    }
+    
+    // Show all headers with potential issues highlighted
+    println!("{}", "Headers:".bold());
+    for (key, value) in &greq_file.content.headers {
+        let key_color = if key.to_lowercase().contains("content") || key.to_lowercase().contains("auth") {
+            key.yellow()
+        } else {
+            key.normal()
+        };
+        println!("  {}: {}", key_color, value);
+    }
+    
+    // Show body info
+    if let Some(ref body) = greq_file.content.body {
+        println!("{}", "Body:".bold());
+        if body.len() > 200 {
+            println!("  {} ({} bytes)", "Large body truncated...".italic(), body.len().to_string().yellow());
+            println!("  {}", &body[..200]);
+            println!("  {}", "...".italic());
+        } else {
+            println!("  {}", body);
+        }
+        
+        // Validate JSON if content-type suggests it
+        if let Some(content_type) = greq_file.content.headers.get("content-type") {
+            if content_type.contains("json") {
+                match serde_json::from_str::<serde_json::Value>(body) {
+                    Ok(_) => println!("{} {}", "✓ JSON Valid:".bold().green(), "Body is valid JSON"),
+                    Err(e) => println!("{} {} - {}", "✗ JSON Invalid:".bold().red(), "Body is not valid JSON".red(), e.to_string().yellow()),
+                }
+            }
+        }
+    } else {
+        println!("{} {}", "Body:".bold(), "(none)".italic().dimmed());
+    }
+    
+    println!("{}", "=".repeat(40).blue());
 }
 
 /// Format error type for better readability
