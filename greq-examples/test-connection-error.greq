@@ -1,0 +1,13 @@
+project: Test Connection Error
+is-http: true
+timeout: 5000
+number-of-retries: 1
+
+====
+
+GET /api/test HTTP/1.1
+host: non-existent-domain-for-testing.invalid
+
+====
+
+status-code equals: 200

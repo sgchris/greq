@@ -9,6 +9,7 @@ use crate::placeholders::{
 use colored::*;
 use reqwest::Client;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -470,6 +471,11 @@ async fn execute_http_request(greq_file: &GreqFile, verbose: bool) -> Result<Res
                 });
             }
             Err(e) => {
+                // Print verbose error details if verbose flag is enabled
+                if verbose {
+                    print_verbose_error(greq_file, &e, attempt as usize, max_retries as usize);
+                }
+                
                 last_error = Some(e);
                 if attempt < max_retries {
                     // Wait before retry (exponential backoff)
@@ -657,11 +663,47 @@ fn print_verbose_response(file_path: &std::path::Path, response: &Response) {
         "📄 Response for:".bold().cyan(),
         file_name.yellow()
     );
+    
+    // Color code status based on success/error
+    let status_display = if response.status_code >= 400 {
+        format!("{}", response.status_code).red().bold()
+    } else if response.status_code >= 300 {
+        format!("{}", response.status_code).yellow()
+    } else {
+        format!("{}", response.status_code).green()
+    };
+    
     println!(
         "{} {}",
         "Status Code:".bold(),
-        format!("{}", response.status_code).green()
+        status_display
     );
+    
+    // Add status explanation for error codes
+    if response.status_code >= 400 {
+        let status_text = match response.status_code {
+            400 => "Bad Request - The request was malformed or invalid",
+            401 => "Unauthorized - Authentication required or failed",
+            403 => "Forbidden - Access denied",
+            404 => "Not Found - Resource does not exist",
+            405 => "Method Not Allowed - HTTP method not supported",
+            409 => "Conflict - Request conflicts with current state",
+            422 => "Unprocessable Entity - Request validation failed",
+            429 => "Too Many Requests - Rate limit exceeded",
+            500 => "Internal Server Error - Server encountered an error",
+            502 => "Bad Gateway - Invalid response from upstream server",
+            503 => "Service Unavailable - Server temporarily unavailable",
+            504 => "Gateway Timeout - Upstream server timeout",
+            _ => {
+                if response.status_code >= 500 {
+                    "Server Error - Internal server problem"
+                } else {
+                    "Client Error - Problem with the request"
+                }
+            }
+        };
+        println!("{} {}", "Status Info:".bold(), status_text.red());
+    }
     println!(
         "{} {}ms",
         "Response Time:".bold(),
@@ -699,6 +741,106 @@ fn print_verbose_response(file_path: &std::path::Path, response: &Response) {
         }
     }
     println!("{}", "-".repeat(50).dimmed());
+}
+
+/// Print verbose error details for failed requests
+fn print_verbose_error(greq_file: &GreqFile, error: &reqwest::Error, attempt: usize, max_retries: usize) {
+    use colored::*;
+    
+    let file_name = std::path::Path::new(&greq_file.file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    
+    println!("\n{} {}", "❌ Request Failed:".bold().red(), file_name.yellow());
+    
+    // Show attempt information
+    if max_retries > 1 {
+        println!("{} {} of {}", "Attempt:".bold(), attempt.to_string().red(), max_retries.to_string().blue());
+    }
+    
+    // Show error details
+    println!("{} {}", "Error Type:".bold(), format_error_type(error).red());
+    println!("{} {}", "Error Message:".bold(), error.to_string());
+    
+    // Show detailed error information
+    print_detailed_error_info(error);
+    
+    // Show specific error details based on error type
+    if error.is_timeout() {
+        println!("{} {}", "Details:".bold(), "Request timed out".yellow());
+    } else if error.is_connect() {
+        println!("{} {}", "Details:".bold(), "Failed to connect to server".yellow());
+    } else if error.is_request() {
+        println!("{} {}", "Details:".bold(), "Invalid request configuration".yellow());
+    } else if error.is_decode() {
+        println!("{} {}", "Details:".bold(), "Failed to decode response".yellow());
+    }
+    
+    // Show what will happen next
+    if attempt < max_retries {
+        let delay_ms = 100 * (1 << (attempt - 1));
+        println!("{} Retrying in {}ms... ({} attempts remaining)", 
+            "⏳".yellow(), 
+            delay_ms.to_string().blue(),
+            (max_retries - attempt).to_string().blue()
+        );
+    } else {
+        println!("{} {}", "Status:".bold(), "No more retries, request failed".red());
+    }
+    
+    println!("{}", "-".repeat(50).red());
+}
+
+/// Print detailed error information extracted from reqwest::Error
+fn print_detailed_error_info(error: &reqwest::Error) {
+    use colored::*;
+    
+    // Check if this is an HTTP status error (4xx, 5xx responses)
+    if let Some(status) = error.status() {
+        println!("{} {} ({})", "HTTP Status:".bold(), status.as_u16().to_string().red(), status.canonical_reason().unwrap_or("Unknown"));
+    }
+    
+    // Check for URL-related information
+    if let Some(url) = error.url() {
+        println!("{} {}", "Failed URL:".bold(), url.to_string().cyan());
+    }
+    
+    // Check for source error (underlying cause)
+    if let Some(source) = error.source() {
+        println!("{} {}", "Underlying Cause:".bold(), source.to_string().yellow());
+    }
+    
+    // Additional error context based on error type
+    if error.is_timeout() {
+        println!("{} Check if the server is responding or increase the timeout value", "💡 Hint:".bold().blue());
+    } else if error.is_connect() {
+        println!("{} Verify the host address and ensure the server is running", "💡 Hint:".bold().blue());
+        println!("{} Check firewall settings and network connectivity", "💡 Hint:".bold().blue());
+    } else if error.is_request() {
+        println!("{} Check request headers, body format, or HTTP method", "💡 Hint:".bold().blue());
+    } else if error.is_decode() {
+        println!("{} Server may have returned unexpected content type or malformed data", "💡 Hint:".bold().blue());
+    }
+}
+
+/// Format error type for better readability
+fn format_error_type(error: &reqwest::Error) -> &'static str {
+    if error.is_timeout() {
+        "Timeout"
+    } else if error.is_connect() {
+        "Connection Error"
+    } else if error.is_request() {
+        "Request Error"
+    } else if error.is_decode() {
+        "Response Decode Error"
+    } else if error.is_redirect() {
+        "Redirect Error"
+    } else if error.is_body() {
+        "Request Body Error"
+    } else {
+        "Unknown Error"
+    }
 }
 
 #[cfg(test)]

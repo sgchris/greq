@@ -1,0 +1,13 @@
+project: Test Verbose Error Output
+is-http: true
+timeout: 1000
+number-of-retries: 2
+
+====
+
+GET /delay/5 HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200
