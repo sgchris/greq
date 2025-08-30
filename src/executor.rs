@@ -396,15 +396,28 @@ async fn execute_http_request(greq_file: &GreqFile, verbose: bool) -> Result<Res
         }
     };
 
-    // Add headers (excluding host as it's used for URL construction)
+    // Add all headers including host (to match curl behavior)
     for (key, value) in &greq_file.content.headers {
-        if key.to_lowercase() != "host" {
-            request_builder = request_builder.header(key, value);
-        }
+        log::debug!("Adding header: {}: {}", key, value);
+        request_builder = request_builder.header(key, value);
     }
 
     // Add body if present
     if let Some(body) = &greq_file.content.body {
+        // Log the exact body being sent for debugging
+        log::debug!("Request body length: {} bytes", body.len());
+        log::debug!("Request body content: {}", body);
+        
+        // Explicitly set Content-Length if not already set
+        let content_length_set = greq_file.content.headers
+            .keys()
+            .any(|k| k.to_lowercase() == "content-length");
+        
+        if !content_length_set {
+            request_builder = request_builder.header("content-length", body.len().to_string());
+            log::debug!("Auto-setting Content-Length: {}", body.len());
+        }
+        
         request_builder = request_builder.body(body.clone());
     }
 
@@ -433,11 +446,14 @@ async fn execute_http_request(greq_file: &GreqFile, verbose: bool) -> Result<Res
 
         let response_result = request_builder
             .try_clone()
-            .ok_or_else(|| GreqError::Validation("Failed to clone request".to_string()))?
-            .send()
-            .await;
+            .ok_or_else(|| GreqError::Validation("Failed to clone request".to_string()))?;
+        
+        // Log the request details before sending
+        log::debug!("Sending request attempt {} of {}", attempt, max_retries);
+        
+        let send_result = response_result.send().await;
 
-        match response_result {
+        match send_result {
             Ok(response) => {
                 let latency = start_time.elapsed();
                 let status_code = response.status().as_u16();
