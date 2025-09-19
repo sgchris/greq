@@ -36,7 +36,7 @@ const Newsletter = () => {
           <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Stay Updated
           </h2>
-          <p className="mt-4 text-lg leading-8 text-primary-200">
+          <p className="mt-4 text-lg leading-8 text-white">
             Get notified about new features, updates, and API testing best practices.
           </p>
           
@@ -82,7 +82,7 @@ const Newsletter = () => {
             </p>
           )}
           
-          <p className="mt-4 text-sm text-primary-300">
+          <p className="mt-4 text-sm text-white">
             No spam, unsubscribe at any time. We respect your privacy.
           </p>
         </div>

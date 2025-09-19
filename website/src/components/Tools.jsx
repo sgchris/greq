@@ -163,7 +163,8 @@ response-body.json.username exists: true`
                         <ChevronDownIcon className="h-5 w-5 text-gray-400" />
                       ) : (
                         <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-                      )}\n                    </button>
+                      )}
+                    </button>
                     {expanded[key] && (
                       <div className="px-6 pb-6 bg-gray-50">
                         <div className="code-block mt-4">
@@ -174,7 +175,8 @@ response-body.json.username exists: true`
                       </div>
                     )}
                   </div>
-                ))}\n              </div>
+                ))}
+              </div>
             )}
 
             {activeTab === 'syntax' && (
