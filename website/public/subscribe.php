@@ -6,8 +6,12 @@
  * No frameworks, pure PHP implementation.
  */
 
-// Load configuration
+// Load configuration and security
 require_once 'config.php';
+require_once 'security.php';
+
+// Initialize security (HTTPS, rate limiting, headers)
+initSecurity();
 
 // Set CORS headers for production and development
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -125,7 +129,7 @@ try {
         exit();
     }
     
-    $email = trim($input['email'] ?? '');
+    $email = sanitizeInput($input['email'] ?? '', 'email');
     
     // Validate email
     $emailError = validateEmail($email);
@@ -156,6 +160,7 @@ try {
     
     // Add subscriber
     if (addSubscriber($pdo, $email, $ipAddress, $userAgent)) {
+        logSecurityEvent('newsletter_subscription', ['email' => $email]);
         http_response_code(201);
         echo json_encode([
             'success' => true,

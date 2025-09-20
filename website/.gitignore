@@ -27,6 +27,11 @@ dist-ssr
 database/
 public/config.php
 
+# Security files and logs
+temp/
+*.log
+logs/
+
 # Security - never commit credentials
 *.env
 *.env.local

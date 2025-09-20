@@ -21,11 +21,20 @@ define('ALLOWED_ORIGINS', [
 define('DB_PATH', __DIR__ . '/../database/subscribers.db');
 
 // Security Settings
-define('REQUIRE_HTTPS', false); // Set to true in production
-define('SESSION_TIMEOUT', 3600); // 1 hour
+define('REQUIRE_HTTPS', true); // Set to true in production - enforces HTTPS redirects
+define('SESSION_TIMEOUT', 3600); // Session timeout in seconds (1 hour default)
 
-// Rate Limiting (requests per IP per hour)
-define('RATE_LIMIT_ENABLED', false); // Enable in production
-define('RATE_LIMIT_MAX_REQUESTS', 10);
+// Rate Limiting Configuration
+define('RATE_LIMIT_ENABLED', true); // Enable rate limiting in production
+define('RATE_LIMIT_MAX_REQUESTS', 5); // Max requests per IP per hour
+
+// Security Features Implemented:
+// - HTTPS enforcement with automatic redirects
+// - Secure session management with timeout
+// - Rate limiting per IP address (configurable window)
+// - Security headers (CSP, HSTS, XSS protection)
+// - Input sanitization and validation
+// - Security event logging
+// - Protection against common web attacks
 
 ?>

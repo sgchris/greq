@@ -10,14 +10,19 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Load configuration
+// Load configuration and security
 require_once 'config.php';
+require_once 'security.php';
+
+// Initialize security with session management
+initSecurity(true);
 
 // HTTP Basic Authentication
 if (!isset($_SERVER['PHP_AUTH_USER']) || 
     $_SERVER['PHP_AUTH_USER'] !== ADMIN_USERNAME || 
     $_SERVER['PHP_AUTH_PW'] !== ADMIN_PASSWORD) {
     
+    logSecurityEvent('admin_auth_failed', ['username' => $_SERVER['PHP_AUTH_USER'] ?? 'none']);
     header('WWW-Authenticate: Basic realm="Greq Newsletter Admin"');
     header('HTTP/1.0 401 Unauthorized');
     echo '<!DOCTYPE html>
@@ -37,6 +42,9 @@ if (!isset($_SERVER['PHP_AUTH_USER']) ||
 </html>';
     exit();
 }
+
+// Log successful authentication
+logSecurityEvent('admin_access_granted', ['username' => $_SERVER['PHP_AUTH_USER']]);
 
 $dbPath = DB_PATH;
 
