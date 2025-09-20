@@ -84,6 +84,45 @@ Update the content directly in the component files or extract to a separate cont
 - **Social Links**: GitHub, Twitter, Discord integration
 - **Performance**: Optimized with Vite for fast loading
 
+## 🚀 Newsletter Subscription
+
+The website includes a functional newsletter subscription system with PHP backend:
+
+### Setup Newsletter API
+
+1. **Configure the system**:
+   ```bash
+   cd public
+   cp config.template.php config.php
+   # Edit config.php and set a strong admin password
+   ```
+
+2. **Start the PHP server** (in a separate terminal):
+   ```bash
+   php -S localhost:8080
+   ```
+   
+   Or use the provided scripts:
+   - Windows: `public/start-server.bat`
+   - Unix/Mac: `public/start-server.sh`
+
+3. **The React app will automatically connect** to the API at `http://localhost:8080`
+
+4. **View subscribers** at `http://localhost:8080/admin.php` 
+   - Default credentials: `admin` / `greq2025!secure`
+   - **Change the password in config.php for production!**
+
+### API Features
+
+- **SQLite Database**: Automatic database creation and table setup
+- **Email Validation**: Server-side email format validation
+- **Duplicate Prevention**: Prevents duplicate subscriptions
+- **CORS Support**: Configured for greq.me domain and subdomains
+- **Admin Interface**: Password-protected subscriber management
+- **Error Handling**: Comprehensive error responses
+- **Security**: HTTP Basic Authentication for admin panel
+- **Configuration**: Centralized config file for easy deployment
+
 ## 🚀 Deployment
 
 The website can be deployed to any static hosting service:
@@ -100,6 +139,8 @@ Popular deployment options:
 - **Netlify**: Drag and drop the `dist` folder
 - **GitHub Pages**: Push to a branch and enable Pages
 - **Cloudflare Pages**: Connect your repository
+
+For production deployment of the newsletter API, deploy the `public/` folder to a PHP hosting service.
 
 ## 🤝 Contributing
 

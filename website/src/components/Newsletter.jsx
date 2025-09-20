@@ -15,15 +15,33 @@ const Newsletter = () => {
     
     setStatus('loading')
     
-    // Simulate API call - replace with actual newsletter signup
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setStatus('success')
-      setEmail('')
+      const response = await fetch('http://localhost:8080/subscribe.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      })
       
-      // Reset success message after 3 seconds
-      setTimeout(() => setStatus(''), 3000)
-    } catch {
+      if (response.ok) {
+        setStatus('success')
+        setEmail('')
+        
+        // Reset success message after 3 seconds
+        setTimeout(() => setStatus(''), 3000)
+      } else {
+        // Handle specific error messages from the server
+        if (response.status === 409) {
+          setStatus('already-subscribed')
+        } else {
+          setStatus('error')
+        }
+        setTimeout(() => setStatus(''), 3000)
+      }
+    } catch (error) {
+      console.error('Subscription error:', error)
       setStatus('error')
       setTimeout(() => setStatus(''), 3000)
     }
@@ -78,7 +96,13 @@ const Newsletter = () => {
           
           {status === 'error' && (
             <p className="mt-3 text-sm text-red-200">
-              Please enter a valid email address.
+              Please enter a valid email address or try again later.
+            </p>
+          )}
+          
+          {status === 'already-subscribed' && (
+            <p className="mt-3 text-sm text-yellow-200">
+              This email is already subscribed to our newsletter.
             </p>
           )}
           
