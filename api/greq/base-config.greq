@@ -1,0 +1,21 @@
+project: API Base Configuration
+base-url: http://localhost:8080
+timeout: 10000
+is-http: true
+
+# Common headers for all requests
+headers:
+  user-agent: Greq/1.0 API Test Suite
+  accept: application/json
+
+# Authentication for protected endpoints  
+auth:
+  admin-user: admin
+  admin-pass: greq2024!
+
+# Expected security headers
+security-headers:
+  - X-Content-Type-Options: nosniff
+  - X-Frame-Options: DENY
+  - X-XSS-Protection: 1; mode=block
+  - Referrer-Policy: strict-origin-when-cross-origin

@@ -1,0 +1,21 @@
+project: Newsletter Subscription Test
+timeout: 5000
+is-http: true
+
+====
+
+POST /api/subscribe HTTP/1.1
+host: localhost:8080
+content-type: application/json
+user-agent: Greq/1.0
+
+{
+  "email": "john.doe@example.com"
+}
+
+====
+
+status-code equals: 201
+or status-code equals: 200
+response-body.success equals: true
+response-body.message contains: subscribed

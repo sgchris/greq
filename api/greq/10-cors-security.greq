@@ -1,0 +1,32 @@
+project: CORS and Security Headers Test
+timeout: 5000
+is-http: true
+
+====
+
+OPTIONS /api/subscribe HTTP/1.1
+host: localhost:8080
+origin: https://example.com
+access-control-request-method: POST
+access-control-request-headers: Content-Type
+user-agent: Greq/1.0
+
+====
+
+status-code equals: 200
+response-headers.Access-Control-Allow-Origin exists: true
+response-headers.Access-Control-Allow-Methods contains: POST
+response-headers.Access-Control-Allow-Headers contains: Content-Type
+
+====
+
+GET /api/health HTTP/1.1
+host: localhost:8080
+user-agent: Greq/1.0
+
+====
+
+response-headers.X-Content-Type-Options equals: nosniff
+response-headers.X-Frame-Options equals: DENY  
+response-headers.X-XSS-Protection equals: 1; mode=block
+response-headers.Referrer-Policy exists: true

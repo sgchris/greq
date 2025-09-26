@@ -1,0 +1,15 @@
+project: Unauthorized Access Test
+timeout: 5000
+is-http: true
+
+====
+
+GET /api/subscribers HTTP/1.1
+host: localhost:8080
+user-agent: Greq/1.0
+
+====
+
+status-code equals: 401
+response-body.json.error contains: authentication required
+response-body.json.status equals: 401

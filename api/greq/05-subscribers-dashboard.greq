@@ -1,0 +1,20 @@
+project: Subscribers Dashboard Test
+timeout: 10000
+is-http: true
+
+====
+
+GET /api/subscribers HTTP/1.1
+host: localhost:8080
+authorization: Basic YWRtaW46Z3JlcTIwMjQh
+user-agent: Greq/1.0
+
+====
+
+status-code equals: 200
+response-body contains: Newsletter Subscribers
+response-body contains: Greq API Service
+response-body contains: Active Subscribers
+response-body contains: Subscriber Details
+response-body contains: john.doe@example.com
+latency less-than: 3000

@@ -1,0 +1,20 @@
+project: Invalid JSON Test
+timeout: 5000
+is-http: true
+
+====
+
+POST /api/subscribe HTTP/1.1
+host: localhost:8080
+content-type: application/json
+user-agent: Greq/1.0
+
+{
+  "email": "test@example.com"
+  "invalid": json
+
+====
+
+status-code equals: 400
+response-body.json.error contains: Invalid JSON
+response-body.json.status equals: 400

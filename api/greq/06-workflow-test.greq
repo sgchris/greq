@@ -1,0 +1,98 @@
+project: API Comprehensive Workflow Test
+timeout: 15000
+is-http: true
+
+====
+
+# Step 1: Health Check
+GET /api/health HTTP/1.1
+host: localhost:8080
+user-agent: Greq/1.0
+
+====
+
+status-code equals: 200
+response-body.json.status equals: operational
+
+====
+
+# Step 2: Subscribe First User
+POST /api/subscribe HTTP/1.1
+host: localhost:8080
+content-type: application/json
+user-agent: Greq/1.0
+
+{
+  "email": "alice@company.com"
+}
+
+====
+
+status-code equals: 201
+response-body.json.success equals: true
+
+====
+
+# Step 3: Subscribe Second User
+POST /api/subscribe HTTP/1.1
+host: localhost:8080
+content-type: application/json
+user-agent: Greq/1.0
+
+{
+  "email": "bob@startup.io"
+}
+
+====
+
+status-code equals: 201
+response-body.json.success equals: true
+
+====
+
+# Step 4: Try Invalid Email
+POST /api/subscribe HTTP/1.1
+host: localhost:8080
+content-type: application/json
+user-agent: Greq/1.0
+
+{
+  "email": "invalid-email-format"
+}
+
+====
+
+status-code equals: 400
+response-body.json.error contains: Invalid email
+
+====
+
+# Step 5: Try Duplicate Subscription
+POST /api/subscribe HTTP/1.1
+host: localhost:8080
+content-type: application/json
+user-agent: Greq/1.0
+
+{
+  "email": "alice@company.com"
+}
+
+====
+
+status-code equals: 409
+response-body.json.error contains: already subscribed
+
+====
+
+# Step 6: View Subscribers Dashboard
+GET /api/subscribers HTTP/1.1
+host: localhost:8080
+authorization: Basic YWRtaW46Z3JlcTIwMjQh
+user-agent: Greq/1.0
+
+====
+
+status-code equals: 200
+response-body contains: alice@company.com
+response-body contains: bob@startup.io
+response-body contains: Active Subscribers
