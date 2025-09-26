@@ -57,7 +57,7 @@ const Newsletter = () => {
           <p className="mt-4 text-lg leading-8 text-white">
             Get notified about new features, updates, and API testing best practices.
           </p>
-          
+          {/*
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <div className="flex-1 max-w-md relative">
               <label htmlFor="email" className="sr-only">
@@ -109,6 +109,7 @@ const Newsletter = () => {
           <p className="mt-4 text-sm text-white">
             No spam, unsubscribe at any time. We respect your privacy.
           </p>
+           */}
         </div>
       </div>
     </section>
