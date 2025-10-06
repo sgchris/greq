@@ -1,0 +1,8 @@
+project: Execute After Example  
+show-warnings: true
+execute-after: echo "Response received with status: $(dependency.status-code)"
+====
+GET /api/status
+host: httpbin.org
+====
+status-code equals: 200

@@ -33,6 +33,7 @@ response-body contains: id
 - Parse `.greq` request files with structured metadata, body, and evaluation conditions
 - Run requests and validate responses
 - Supports inheritance, templating, placeholders, and chain of dependencies
+- **Execute shell commands before and after HTTP requests** with `execute-before` and `execute-after`
 - Environment variable placeholders with `$(environment.VAR_NAME)` syntax
 - Allow dependency failure handling with `allow-dependency-failure` property
 - Configurable warning system with `show-warnings` property

@@ -1,0 +1,8 @@
+project: Execute Before Example
+show-warnings: true
+execute-before: echo "Starting API request..."
+====
+GET /api/ping
+host: localhost
+====
+status-code equals: 200

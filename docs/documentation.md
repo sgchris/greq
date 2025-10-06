@@ -52,6 +52,8 @@ condition: value
 | `show-warnings` | Show warning messages during execution | `show-warnings: false` | `true` |
 | `timeout` | Request timeout in milliseconds | `timeout: 5000` | `30000` |
 | `number-of-retries` | Retry attempts on failure | `number-of-retries: 3` | `0` |
+| `execute-before` | Shell command to run before HTTP request | `execute-before: echo "Starting test"` | None |
+| `execute-after` | Shell command to run after response received | `execute-after: echo "Test completed"` | None |
 
 ### Property Details
 
@@ -69,6 +71,67 @@ Controls whether warning messages are displayed during execution. When set to `f
 
 #### `timeout`
 Maximum time to wait for a response in milliseconds. Requests exceeding this time will fail.
+
+#### `execute-before`
+Executes a shell command before sending the HTTP request. The command runs after dependency resolution and placeholder replacement, but before the actual HTTP request is sent. This is useful for:
+- Setting up test data
+- Preparing test environment
+- Logging test start
+- Executing setup scripts
+
+The command supports placeholders for both environment variables and dependency responses (if `depends-on` is specified).
+
+**Example:**
+```greq
+execute-before: echo "Preparing test environment"
+execute-before: ./scripts/setup-test-data.sh
+execute-before: echo "API Key: $(environment.API_KEY)"
+```
+
+**Important:** If the execute-before command fails (non-zero exit code), the test is marked as failed and execution stops.
+
+#### `execute-after`
+Executes a shell command after receiving the HTTP response and evaluating all conditions. The command runs regardless of whether conditions passed or failed. This is useful for:
+- Cleaning up test data
+- Logging test results
+- Sending notifications
+- Executing teardown scripts
+
+The command supports placeholders for environment variables, dependency responses, and the current response.
+
+**Example:**
+```greq
+execute-after: echo "Test completed with status: $(dependency.status-code)"
+execute-after: ./scripts/cleanup.sh
+execute-after: echo "Response body: $(dependency.response-body)"
+```
+
+**Important:** If the execute-after command fails, the test is marked as failed even if all conditions passed.
+
+#### Shell Command Execution Details
+
+**Windows**: Commands are executed using `powershell.exe -Command`
+**Unix/Linux/Mac**: Commands are executed using `sh -c`
+
+**Working Directory**: Commands run in the same directory as the greq file.
+
+**Placeholders**: Both execute-before and execute-after support full placeholder replacement:
+- `$(environment.VAR_NAME)` - Environment variables
+- `$(dependency.field)` or `$(dep.field)` - Data from dependency responses
+- In execute-after: `$(dependency.field)` references the current response
+
+**Example with Dependencies:**
+```greq
+project: User Cleanup Test
+depends-on: create-user.greq
+execute-before: echo "Cleaning up user ID: $(dependency.response-body.id)"
+execute-after: echo "Cleanup completed with status $(dependency.status-code)"
+====
+DELETE /users/$(dependency.response-body.id)
+host: api.example.com
+====
+status-code equals: 200
+```
 
 ## Content Section
 

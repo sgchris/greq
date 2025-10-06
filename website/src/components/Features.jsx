@@ -4,7 +4,8 @@ import {
   CheckCircleIcon, 
   CommandLineIcon,
   ClockIcon,
-  ArrowPathIcon 
+  ArrowPathIcon,
+  TerminalIcon
 } from '@heroicons/react/24/outline'
 
 const Features = () => {
@@ -87,6 +88,23 @@ show-warnings: false
 
 POST /users HTTP/1.1
 content-type: application/json`
+    },
+    {
+      name: 'Shell Command Execution',
+      description: 'Execute shell commands before and after HTTP requests for setup, cleanup, and automation.',
+      icon: TerminalIcon,
+      example: `depends-on: create-user.greq
+execute-before: echo "Setting up test data"
+execute-after: ./cleanup.sh $(dependency.response-body.id)
+
+====
+
+DELETE /users/$(dependency.response-body.id) HTTP/1.1
+host: api.example.com
+
+====
+
+status-code equals: 200`
     }
   ]
 

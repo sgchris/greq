@@ -85,6 +85,37 @@ pub async fn execute_greq_file<P: AsRef<Path>>(
             replace_placeholders_in_greq_file_with_optional_response(&mut greq_file, None)?;
         }
 
+        // Execute execute-before command if specified
+        if let Some(ref command) = greq_file.header.execute_before {
+            log::info!("Executing execute-before command for: {:?}", dep_path);
+            
+            // Get working directory (directory containing the greq file)
+            let working_dir = dep_path.parent().unwrap_or_else(|| Path::new("."));
+            
+            // Get dependency response if available
+            let dep_response = if let Some(depends_on) = &greq_file.header.depends_on {
+                let dep_response_path = resolve_file_path(&dep_path, depends_on);
+                dependency_responses.get(&dep_response_path)
+            } else {
+                None
+            };
+            
+            match execute_shell_command(command, working_dir, dep_response, &dep_path, verbose) {
+                Ok((stdout, _)) => {
+                    log::debug!("execute-before command succeeded: {}", stdout);
+                    if verbose {
+                        println!("  ✓ execute-before completed successfully");
+                    }
+                }
+                Err(e) => {
+                    log::error!("execute-before command failed: {}", e);
+                    // Mark as failed and continue to next file
+                    failed_dependencies.insert(dep_path.clone());
+                    continue;
+                }
+            }
+        }
+
         // Execute the HTTP request
         match execute_http_request(&greq_file, verbose).await {
             Ok(response) => {
@@ -156,6 +187,30 @@ pub async fn execute_greq_file<P: AsRef<Path>>(
                             // Mark this dependency as failed
                             failed_dependencies.insert(dep_path.clone());
                             // Continue execution without storing this response
+                            continue;
+                        }
+                    }
+                }
+
+                // Execute execute-after command if specified
+                if let Some(ref command) = greq_file.header.execute_after {
+                    log::info!("Executing execute-after command for: {:?}", dep_path);
+                    
+                    // Get working directory (directory containing the greq file)
+                    let working_dir = dep_path.parent().unwrap_or_else(|| Path::new("."));
+                    
+                    // Use the current response for placeholder replacement
+                    match execute_shell_command(command, working_dir, Some(&response), &dep_path, verbose) {
+                        Ok((stdout, _)) => {
+                            log::debug!("execute-after command succeeded: {}", stdout);
+                            if verbose {
+                                println!("  ✓ execute-after completed successfully");
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("execute-after command failed: {}", e);
+                            // Mark as failed and continue to next file
+                            failed_dependencies.insert(dep_path.clone());
                             continue;
                         }
                     }
@@ -1022,4 +1077,214 @@ mod tests {
             assert!(e.to_string().contains("Circular dependency"));
         }
     }
+
+    #[test]
+    fn test_execute_before_command() {
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+
+        // Create a file with execute-before
+        let file_path = dir.path().join("test.greq");
+        fs::write(
+            &file_path,
+            "project: test\nexecute-before: echo test-before\n====\nGET /get\nhost: httpbin.org\n====\nstatus-code equals: 200",
+        )
+        .unwrap();
+
+        // Parse the file
+        let greq_file = parse_greq_file(&file_path).unwrap();
+
+        // Verify execute_before is parsed correctly
+        assert!(greq_file.header.execute_before.is_some());
+        assert_eq!(greq_file.header.execute_before.unwrap(), "echo test-before");
+    }
+
+    #[test]
+    fn test_execute_after_command() {
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+
+        // Create a file with execute-after
+        let file_path = dir.path().join("test.greq");
+        fs::write(
+            &file_path,
+            "project: test\nexecute-after: echo test-after\n====\nGET /get\nhost: httpbin.org\n====\nstatus-code equals: 200",
+        )
+        .unwrap();
+
+        // Parse the file
+        let greq_file = parse_greq_file(&file_path).unwrap();
+
+        // Verify execute_after is parsed correctly
+        assert!(greq_file.header.execute_after.is_some());
+        assert_eq!(greq_file.header.execute_after.unwrap(), "echo test-after");
+    }
+
+    #[test]
+    fn test_execute_command_with_placeholders() {
+        use tempfile::tempdir;
+        use std::env;
+
+        let dir = tempdir().unwrap();
+
+        // Set environment variable for testing
+        env::set_var("TEST_VAR", "test_value");
+
+        // Create a file with execute-before using environment placeholder
+        let file_path = dir.path().join("test.greq");
+        fs::write(
+            &file_path,
+            "project: test\nexecute-before: echo $(environment.TEST_VAR)\n====\nGET /get\nhost: httpbin.org\n====\nstatus-code equals: 200",
+        )
+        .unwrap();
+
+        // Parse the file
+        let greq_file = parse_greq_file(&file_path).unwrap();
+
+        // Verify execute_before contains the placeholder
+        assert!(greq_file.header.execute_before.is_some());
+        assert!(greq_file.header.execute_before.unwrap().contains("$(environment.TEST_VAR)"));
+
+        // Clean up
+        env::remove_var("TEST_VAR");
+    }
+
+    #[test]
+    fn test_execute_both_commands() {
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+
+        // Create a file with both execute-before and execute-after
+        let file_path = dir.path().join("test.greq");
+        fs::write(
+            &file_path,
+            "project: test\nexecute-before: echo before\nexecute-after: echo after\n====\nGET /get\nhost: httpbin.org\n====\nstatus-code equals: 200",
+        )
+        .unwrap();
+
+        // Parse the file
+        let greq_file = parse_greq_file(&file_path).unwrap();
+
+        // Verify both are parsed correctly
+        assert!(greq_file.header.execute_before.is_some());
+        assert_eq!(greq_file.header.execute_before.unwrap(), "echo before");
+        assert!(greq_file.header.execute_after.is_some());
+        assert_eq!(greq_file.header.execute_after.unwrap(), "echo after");
+    }
+}
+
+/// Execute a shell command with placeholder replacement support
+/// 
+/// # Arguments
+/// * `command` - The shell command to execute
+/// * `working_dir` - The directory to execute the command in
+/// * `dependency_response` - Optional dependency response for placeholder replacement
+/// * `file_path` - Path to the greq file (for logging)
+/// * `verbose` - Whether to show verbose output
+/// 
+/// # Returns
+/// Result containing stdout and stderr as tuple
+fn execute_shell_command(
+    command: &str,
+    working_dir: &Path,
+    dependency_response: Option<&Response>,
+    file_path: &Path,
+    verbose: bool,
+) -> Result<(String, String)> {
+    use crate::placeholders::replace_placeholders_with_context;
+    use std::process::Command;
+    use regex::Regex;
+    use std::env;
+
+    // Replace placeholders in the command
+    let processed_command = if let Some(dep_response) = dependency_response {
+        // Replace both dependency and environment placeholders
+        replace_placeholders_with_context(
+            command,
+            dep_response,
+            &file_path.display().to_string(),
+            "execute command",
+        )?
+    } else {
+        // Replace only environment placeholders manually
+        let placeholder_regex = Regex::new(r"\$\(environment\.([^)]+)\)")?;
+        let mut result = command.to_string();
+        
+        for cap in placeholder_regex.captures_iter(command) {
+            let full_match = &cap[0];
+            let var_name = &cap[1];
+            
+            match env::var(var_name) {
+                Ok(value) => {
+                    result = result.replace(full_match, &value);
+                }
+                Err(_) => {
+                    return Err(GreqError::Placeholder(format!(
+                        "{}: execute command: Environment variable '{}' not found",
+                        file_path.display(),
+                        var_name
+                    )));
+                }
+            }
+        }
+        
+        result
+    };
+
+    log::info!("Executing shell command: {}", processed_command);
+    
+    if verbose {
+        println!("  → Running: {}", processed_command);
+    }
+
+    // Determine shell based on OS
+    let (shell, shell_arg) = if cfg!(target_os = "windows") {
+        ("powershell.exe", "-Command")
+    } else {
+        ("sh", "-c")
+    };
+
+    // Execute the command
+    let output = Command::new(shell)
+        .arg(shell_arg)
+        .arg(&processed_command)
+        .current_dir(working_dir)
+        .output()
+        .map_err(|e| GreqError::Validation(format!("Failed to execute command: {}", e)))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if !output.status.success() {
+        log::warn!(
+            "Command exited with status {}: {}",
+            output.status,
+            stderr
+        );
+        if verbose {
+            println!("  ✗ Command failed with status {}", output.status);
+            if !stderr.is_empty() {
+                println!("    Error: {}", stderr.trim());
+            }
+        }
+        return Err(GreqError::Validation(format!(
+            "Command failed with status {}: {}",
+            output.status,
+            stderr
+        )));
+    }
+
+    if verbose && !stdout.is_empty() {
+        println!("  ✓ Command output: {}", stdout.trim());
+    }
+
+    log::debug!("Command stdout: {}", stdout);
+    if !stderr.is_empty() {
+        log::debug!("Command stderr: {}", stderr);
+    }
+
+    Ok((stdout, stderr))
 }

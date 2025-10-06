@@ -1,0 +1,9 @@
+project: Execute Before and After Combined
+show-warnings: true
+execute-before: echo "Preparing test data..."
+execute-after: echo "Cleaning up after status: $(dependency.status-code)"
+====
+GET /get
+host: httpbin.org
+====
+status-code equals: 200

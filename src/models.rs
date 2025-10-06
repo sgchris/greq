@@ -22,6 +22,8 @@ pub struct Header {
     pub timeout: Option<Duration>,
     pub allow_dependency_failure: bool,
     pub show_warnings: bool,
+    pub execute_before: Option<String>,
+    pub execute_after: Option<String>,
 }
 
 /// Content section representing the HTTP request
@@ -114,6 +116,8 @@ impl Default for Header {
             timeout: None,
             allow_dependency_failure: false, // Default to false - dependencies must pass unless explicitly allowed to fail
             show_warnings: true,
+            execute_before: None,
+            execute_after: None,
         }
     }
 }

@@ -127,6 +127,8 @@ fn parse_header_with_lines(header_text: &str, file_path: &str, start_line: usize
                     .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid boolean value '{}' for allow-dependency-failure", file_path, line_num, value)))?,
                 "show-warnings" => header.show_warnings = parse_bool(value)
                     .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid boolean value '{}' for show-warnings", file_path, line_num, value)))?,
+                "execute-before" => header.execute_before = Some(value.to_string()),
+                "execute-after" => header.execute_after = Some(value.to_string()),
                 "timeout" => {
                     let timeout_ms: u64 = value.parse()
                         .map_err(|_| GreqError::Parse(format!("{}:{}: Invalid timeout value '{}'", file_path, line_num, value)))?;
@@ -329,6 +331,8 @@ fn parse_header(header_text: &str) -> Result<Header> {
                 "allow-dependency-failure" => header.allow_dependency_failure = parse_bool(value)?,
                 "show-warnings" => header.show_warnings = parse_bool(value)
                     .map_err(|_| GreqError::Parse(format!("Invalid boolean value '{}' for show-warnings", value)))?,
+                "execute-before" => header.execute_before = Some(value.to_string()),
+                "execute-after" => header.execute_after = Some(value.to_string()),
                 _ => log::warn!("Unknown header property: {key}"),
             }
         }
@@ -577,6 +581,12 @@ pub fn merge_greq_files(base: &GreqFile, extending: &GreqFile) -> Result<GreqFil
     }
     if extending.header.depends_on.is_some() {
         merged.header.depends_on = extending.header.depends_on.clone();
+    }
+    if extending.header.execute_before.is_some() {
+        merged.header.execute_before = extending.header.execute_before.clone();
+    }
+    if extending.header.execute_after.is_some() {
+        merged.header.execute_after = extending.header.execute_after.clone();
     }
     // Note: extends field is not inherited - each file manages its own extends
     

@@ -555,6 +555,8 @@ mod tests {
                 timeout: None,
                 allow_dependency_failure: false,
                 show_warnings: true,
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
@@ -600,6 +602,8 @@ mod tests {
                 timeout: None,
                 allow_dependency_failure: false,
                 show_warnings: true,
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
@@ -645,6 +649,8 @@ mod tests {
                 timeout: None,
                 allow_dependency_failure: true,
                 show_warnings: true,
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
@@ -695,6 +701,8 @@ mod tests {
                 timeout: None,
                 allow_dependency_failure: true,
                 show_warnings: false, // Warnings disabled
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
@@ -751,6 +759,8 @@ mod tests {
                 show_warnings: true,
                 timeout: None,
                 number_of_retries: 0,
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
@@ -792,6 +802,8 @@ mod tests {
                 show_warnings: true,
                 timeout: None,
                 number_of_retries: 0,
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
@@ -829,6 +841,8 @@ mod tests {
                 show_warnings: true,
                 timeout: None,
                 number_of_retries: 0,
+                execute_before: None,
+                execute_after: None,
             },
             content: Content {
                 request_line: RequestLine {
