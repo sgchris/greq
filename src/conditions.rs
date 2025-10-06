@@ -520,4 +520,39 @@ mod tests {
         let result = evaluate_single_condition_test(&condition, &response).unwrap();
         assert!(!result); // NOT exists:true should be false when field exists
     }
+    
+    #[test]
+    fn test_exists_false_with_missing_field() {
+        let response = create_test_response();
+        // Alternative syntax: "response-body.data exists: false"
+        // When field doesn't exist, this should PASS
+        let condition = Condition {
+            is_or: false,
+            is_not: false,
+            key: ConditionKey::ResponseBodyPath("nonexistent_field".to_string()),
+            operator: Operator::Exists,
+            case_sensitive: false,
+            value: "false".to_string(),
+        };
+        
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
+        assert!(result); // exists:false should be true when field doesn't exist
+    }
+    
+    #[test]
+    fn test_exists_false_with_existing_field() {
+        let response = create_test_response();
+        // When field exists, "exists: false" should FAIL
+        let condition = Condition {
+            is_or: false,
+            is_not: false,
+            key: ConditionKey::ResponseBodyPath("id".to_string()),
+            operator: Operator::Exists,
+            case_sensitive: false,
+            value: "false".to_string(),
+        };
+        
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
+        assert!(!result); // exists:false should be false when field exists
+    }
 }
