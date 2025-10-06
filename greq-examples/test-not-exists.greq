@@ -1,0 +1,26 @@
+project: Test NOT EXISTS Condition
+timeout: 5000
+is-http: true
+
+====
+
+GET /api/health HTTP/1.1
+host: localhost:8080
+user-agent: Greq/1.0
+
+====
+
+-- This should pass: status code is 200
+status-code equals: 200
+
+-- This should pass: service field exists
+response-body.json.service exists: true
+
+-- This should pass: nonexistent field does NOT exist
+not response-body.json.nonexistent_field exists: true
+
+-- This should pass: data field does NOT exist in health response
+not response-body.json.data exists: true
+
+-- This should pass: another_missing_field does NOT exist
+not response-body.json.another_missing_field exists: true

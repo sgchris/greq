@@ -69,7 +69,7 @@ pub enum ConditionKey {
 }
 
 /// Comparison operators for conditions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     Equals,
     Contains,

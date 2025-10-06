@@ -71,7 +71,13 @@ enum ConditionResult {
 
 /// Evaluate a single condition with detailed results
 fn evaluate_single_condition_with_details(condition: &Condition, response: &Response, file_path: &str) -> Result<ConditionResult> {
-    let actual_value = extract_condition_value(&condition.key, response, file_path)?;
+    // For exists operator, we need to handle missing JSON paths gracefully
+    let actual_value = if condition.operator == Operator::Exists {
+        extract_condition_value_for_exists(&condition.key, response, file_path)
+    } else {
+        extract_condition_value(&condition.key, response, file_path)?
+    };
+    
     let expected_value = &condition.value;
     
     log::debug!(
@@ -130,6 +136,30 @@ fn extract_condition_value(key: &ConditionKey, response: &Response, file_path: &
         },
         ConditionKey::ResponseBodyPath(path) => {
             extract_json_path_value(&response.body, path, file_path)
+        },
+    }
+}
+
+/// Extract value for exists operator - returns empty string if path doesn't exist
+/// This allows the exists operator to properly check for non-existence
+fn extract_condition_value_for_exists(key: &ConditionKey, response: &Response, file_path: &str) -> String {
+    match key {
+        ConditionKey::StatusCode => response.status_code.to_string(),
+        ConditionKey::Latency => response.latency.as_millis().to_string(),
+        ConditionKey::ResponseBody => response.body.clone(),
+        ConditionKey::Headers => {
+            let headers_str = response.headers.iter()
+                .map(|(k, v)| format!("{k}: {v}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            headers_str
+        },
+        ConditionKey::Header(header_name) => {
+            response.headers.get(&header_name.to_lowercase()).cloned().unwrap_or_default()
+        },
+        ConditionKey::ResponseBodyPath(path) => {
+            // For exists operator, return empty string if path doesn't exist
+            extract_json_path_value(&response.body, path, file_path).unwrap_or_default()
         },
     }
 }
@@ -422,5 +452,72 @@ mod tests {
         
         let result = evaluate_single_condition_test(&condition, &response).unwrap();
         assert!(result); // NOT 404 should be true for 200
+    }
+    
+    #[test]
+    fn test_exists_operator_with_existing_field() {
+        let response = create_test_response();
+        let condition = Condition {
+            is_or: false,
+            is_not: false,
+            key: ConditionKey::ResponseBodyPath("id".to_string()),
+            operator: Operator::Exists,
+            case_sensitive: false,
+            value: "true".to_string(),
+        };
+        
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
+        assert!(result); // id exists in the response
+    }
+    
+    #[test]
+    fn test_exists_operator_with_missing_field() {
+        let response = create_test_response();
+        let condition = Condition {
+            is_or: false,
+            is_not: false,
+            key: ConditionKey::ResponseBodyPath("nonexistent".to_string()),
+            operator: Operator::Exists,
+            case_sensitive: false,
+            value: "false".to_string(),
+        };
+        
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
+        assert!(result); // nonexistent field should have exists: false
+    }
+    
+    #[test]
+    fn test_not_exists_operator_with_missing_field() {
+        let response = create_test_response();
+        // This is the bug fix test: "not response-body.data exists: true"
+        // When data field doesn't exist, this should PASS
+        let condition = Condition {
+            is_or: false,
+            is_not: true,
+            key: ConditionKey::ResponseBodyPath("data".to_string()),
+            operator: Operator::Exists,
+            case_sensitive: false,
+            value: "true".to_string(),
+        };
+        
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
+        assert!(result); // NOT exists:true should be true when field is missing
+    }
+    
+    #[test]
+    fn test_not_exists_operator_with_existing_field() {
+        let response = create_test_response();
+        // When field exists, "not exists: true" should FAIL
+        let condition = Condition {
+            is_or: false,
+            is_not: true,
+            key: ConditionKey::ResponseBodyPath("id".to_string()),
+            operator: Operator::Exists,
+            case_sensitive: false,
+            value: "true".to_string(),
+        };
+        
+        let result = evaluate_single_condition_test(&condition, &response).unwrap();
+        assert!(!result); // NOT exists:true should be false when field exists
     }
 }
