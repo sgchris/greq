@@ -12,7 +12,7 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 200
-response-body.json.status equals: operational
+response-body.status equals: operational
 
 ====
 
@@ -29,7 +29,7 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 201
-response-body.json.success equals: true
+response-body.success equals: true
 
 ====
 
@@ -46,7 +46,7 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 201
-response-body.json.success equals: true
+response-body.success equals: true
 
 ====
 
@@ -63,7 +63,7 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 400
-response-body.json.error contains: Invalid email
+response-body.error contains: Invalid email
 
 ====
 
@@ -80,7 +80,7 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 409
-response-body.json.error contains: already subscribed
+response-body.error contains: already subscribed
 
 ====
 

@@ -85,8 +85,8 @@ content-type: application/json
 ====
 
 status-code equals: 201
-response-body.json.id exists: true
-response-body.json.name equals: John Doe
+response-body.id exists: true
+response-body.name equals: John Doe
 ```
 
 ## Documentation

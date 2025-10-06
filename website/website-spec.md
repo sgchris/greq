@@ -103,7 +103,7 @@ GET /users/123 HTTP/1.1
 
 ====
 
-response-body.json.id equals: 123
+response-body.id equals: 123
 ```
 
 #### 3.2 Smart Dependencies
@@ -142,7 +142,7 @@ status-code equals: 201
 
 status-code equals: 200
 or status-code equals: 201
-response-body.json.users[0].name exists: true
+response-body.users[0].name exists: true
 not response-body contains: error
 latency less-than: 1000
 headers.content-type contains: json

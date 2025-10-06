@@ -14,16 +14,16 @@ user-agent: Greq/1.0
 status-code equals: 200
 
 -- This should pass: url field exists
-response-body.json.url exists: true
+response-body.url exists: true
 
 -- This should pass: args field exists
-response-body.json.args exists: true
+response-body.args exists: true
 
 -- This should pass: nonexistent_field does NOT exist
-not response-body.json.nonexistent_field exists: true
+not response-body.nonexistent_field exists: true
 
 -- This should pass: data field does NOT exist
-not response-body.json.data exists: true
+not response-body.data exists: true
 
 -- This should pass: missing_property does NOT exist
-not response-body.json.missing_property exists: true
+not response-body.missing_property exists: true

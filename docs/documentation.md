@@ -122,7 +122,7 @@ The footer section defines conditions to validate the HTTP response.
 | `headers` | All response headers | `headers contains: content-type` |
 | `headers.name` | Specific header | `headers.content-type contains: json` |
 | `response-body` | Response body content | `response-body contains: success` |
-| `response-body.path` | JSON path in response | `response-body.json.user.id equals: 123` |
+| `response-body.path` | JSON path in response | `response-body.user.id equals: 123` |
 
 ### Operators
 
@@ -163,9 +163,9 @@ case-sensitive response-body contains: SUCCESS
 Navigate JSON responses using dot notation and array indices:
 
 ```greq
-response-body.json.users[0].name equals: John Doe
-response-body.json.metadata.version equals: 1.2.3
-response-body.json.data.items[1].active equals: true
+response-body.users[0].name equals: John Doe
+response-body.metadata.version equals: 1.2.3
+response-body.data.items[1].active equals: true
 ```
 
 ## Inheritance System
@@ -232,7 +232,7 @@ content-type: application/json
 ====
 
 status-code equals: 200
-response-body.json.token exists: true
+response-body.token exists: true
 ```
 
 **protected-resource.greq:**
@@ -354,7 +354,7 @@ is-http: true
 
 GET /protected/resource HTTP/1.1
 host: api.example.com
-authorization: Bearer $(dependency.response-body.json.token)
+authorization: Bearer $(dependency.response-body.token)
 x-fallback-auth: $(environment.FALLBACK_TOKEN)
 
 ====
@@ -435,12 +435,12 @@ authorization: Bearer $(environment.api-token)
 authorization: $(dependency.headers.authorization)
 
 # Use JSON values
-GET /users/$(dependency.response-body.json.id) HTTP/1.1
+GET /users/$(dependency.response-body.id) HTTP/1.1
 
 # In request body
 {
-  "user_id": "$(dependency.response-body.json.user.id)",
-  "session": "$(dependency.response-body.json.session_token)"
+  "user_id": "$(dependency.response-body.user.id)",
+  "session": "$(dependency.response-body.session_token)"
 }
 ```
 
@@ -541,7 +541,7 @@ content-type: application/json
 ====
 
 status-code equals: 200
-response-body.json.json.name equals: John Doe
+response-body.name equals: John Doe
 ```
 
 ### Complex Conditions
@@ -587,7 +587,7 @@ x-client-version: $(environment.app-version)
 ====
 
 status-code equals: 200
-response-body.json.status equals: success
+response-body.status equals: success
 ```
 
 **POST with Environment Variables:**
@@ -611,7 +611,7 @@ content-type: application/json
 ====
 
 status-code equals: 201
-response-body.json.id exists: true
+response-body.id exists: true
 ```
 
 To run these tests, set the required environment variables:
@@ -634,8 +634,8 @@ GET /users/123 HTTP/1.1
 
 ====
 
-response-body.json.id equals: 123
-response-body.json.name exists: true
+response-body.id equals: 123
+response-body.name exists: true
 ```
 
 ### Dependency Chain
@@ -652,7 +652,9 @@ authorization: Bearer $(dependency.response-body.token)
 ====
 
 status-code equals: 200
-response-body.json.username exists: true
+====
+
+response-body.username exists: true
 ```
 
 This documentation covers all major features and syntax of the Greq testing tool. For additional examples, see the `greq-examples/` directory in the project repository.

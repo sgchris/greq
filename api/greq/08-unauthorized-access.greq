@@ -11,5 +11,5 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 401
-response-body.json.error contains: authentication required
-response-body.json.status equals: 401
+response-body.error contains: authentication required
+response-body.status equals: 401

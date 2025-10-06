@@ -16,5 +16,5 @@ user-agent: Greq/1.0
 ====
 
 status-code equals: 400
-response-body.json.error contains: Invalid JSON
-response-body.json.status equals: 400
+response-body.error contains: Invalid JSON
+response-body.status equals: 400

@@ -14,13 +14,13 @@ user-agent: Greq/1.0
 status-code equals: 200
 
 -- This should pass: service field exists
-response-body.json.service exists: true
+response-body.service exists: true
 
 -- This should pass: nonexistent field does NOT exist
-not response-body.json.nonexistent_field exists: true
+not response-body.nonexistent_field exists: true
 
 -- This should pass: data field does NOT exist in health response
-not response-body.json.data exists: true
+not response-body.data exists: true
 
 -- This should pass: another_missing_field does NOT exist
-not response-body.json.another_missing_field exists: true
+not response-body.another_missing_field exists: true
