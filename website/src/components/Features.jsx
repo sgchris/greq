@@ -5,7 +5,7 @@ import {
   CommandLineIcon,
   ClockIcon,
   ArrowPathIcon,
-  TerminalIcon
+  RocketLaunchIcon
 } from '@heroicons/react/24/outline'
 
 const Features = () => {
@@ -92,7 +92,7 @@ content-type: application/json`
     {
       name: 'Shell Command Execution',
       description: 'Execute shell commands before and after HTTP requests for setup, cleanup, and automation.',
-      icon: TerminalIcon,
+      icon: RocketLaunchIcon,
       example: `depends-on: create-user.greq
 execute-before: echo "Setting up test data"
 execute-after: ./cleanup.sh $(dependency.response-body.id)
