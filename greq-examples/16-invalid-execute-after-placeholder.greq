@@ -1,0 +1,14 @@
+project: Invalid - Using dependency placeholder in execute-after without depends-on
+show-warnings: true
+execute-after: echo "Status was: $(dependency.status-code)"
+
+-- This file should fail validation
+
+====
+
+GET /api/test HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

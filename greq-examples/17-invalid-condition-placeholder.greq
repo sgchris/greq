@@ -1,0 +1,14 @@
+﻿project: Invalid - Using dependency placeholder in condition
+show-warnings: true
+
+-- This file should fail validation because the condition uses a dependency placeholder
+-- but doesn't have a depends-on property
+
+====
+
+GET /api/test HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: $(dependency.status-code)

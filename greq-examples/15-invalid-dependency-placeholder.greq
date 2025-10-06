@@ -1,0 +1,15 @@
+﻿project: Invalid - Using dependency placeholder without depends-on
+show-warnings: true
+
+-- This file should fail validation because it uses $(dependency.status-code)
+-- but doesn't have a depends-on property
+
+====
+
+GET /api/test HTTP/1.1
+host: httpbin.org
+x-status: $(dependency.status-code)
+
+====
+
+status-code equals: 200
