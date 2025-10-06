@@ -723,14 +723,14 @@ mod tests {
 
     #[test]
     fn test_dep_prefix_replacement() {
-        let content = "Authorization: Bearer $(dep.response-body.json.token)";
+        let content = "Authorization: Bearer $(dep.response-body.token)";
         let result = replace_dependency_placeholders_with_empty_string(content, "test.greq", "header", false);
         assert_eq!(result.unwrap(), "Authorization: Bearer ");
     }
 
     #[test]
     fn test_mixed_dependency_prefixes() {
-        let content = "$(dependency.status-code) and $(dep.response-body.json.id)";
+        let content = "$(dependency.status-code) and $(dep.response-body.id)";
         let result = replace_dependency_placeholders_with_empty_string(content, "test.greq", "header", false);
         assert_eq!(result.unwrap(), " and ");
     }

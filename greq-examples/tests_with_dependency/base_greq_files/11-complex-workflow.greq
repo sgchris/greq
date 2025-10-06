@@ -8,7 +8,7 @@ PATCH /patch HTTP/1.1
 content-type: application/json
 
 {
-  "user_id": "{{04-create-user.response-body.json.user_id}}",
+  "user_id": "{{04-create-user.response-body.user_id}}",
   "updates": {
     "last_login": "2025-08-08T12:00:00Z",
     "preferences": {

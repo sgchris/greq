@@ -46,7 +46,7 @@ status-code equals: 200`
       icon: CheckCircleIcon,
       example: `status-code equals: 200
 headers.content-type contains: json
-response-body.json.user.id exists: true
+response-body.user.id exists: true
 latency less-than: 1000
 not response-body contains: error`
     },

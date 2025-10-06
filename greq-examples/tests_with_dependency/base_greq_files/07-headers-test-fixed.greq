@@ -13,4 +13,4 @@ x-custom-header: test-value-123
 status-code equals: 200
 headers contains: content-type
 headers.content-type contains: json
-response-body.json.headers.X-Custom-Header equals: test-value-123
+response-body.headers.X-Custom-Header equals: test-value-123

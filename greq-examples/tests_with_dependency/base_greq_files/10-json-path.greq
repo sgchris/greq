@@ -9,7 +9,7 @@ host: httpbin.org
 ====
 
 status-code equals: 200
-response-body.json.slideshow.title equals: Sample Slide Show
-response-body.json.slideshow.author equals: Yours Truly
-response-body.json.slideshow.slides[0].title equals: Wake up to WonderWidgets!
-response-body.json.slideshow.slides[1].items[0] contains: WonderWidgets
+response-body.slideshow.title equals: Sample Slide Show
+response-body.slideshow.author equals: Yours Truly
+response-body.slideshow.slides[0].title equals: Wake up to WonderWidgets!
+response-body.slideshow.slides[1].items[0] contains: WonderWidgets

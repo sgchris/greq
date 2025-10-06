@@ -8,8 +8,8 @@ is-http: true
 
 GET /get HTTP/1.1
 host: httpbin.org
-x-dependency-id: $(dependency.response-body.json.id)
-x-dep-id: $(dep.response-body.json.id)
+x-dependency-id: $(dependency.response-body.id)
+x-dep-id: $(dep.response-body.id)
 
 ====
 

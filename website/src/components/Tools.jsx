@@ -47,8 +47,8 @@ content-type: application/json
 ====
 
 status-code equals: 201
-response-body.json.id exists: true
-response-body.json.name equals: John Doe`
+response-body.id exists: true
+response-body.name equals: John Doe`
     },
     auth: {
       title: 'Authentication Chain',
@@ -71,7 +71,7 @@ content-type: application/json
 ====
 
 status-code equals: 200
-response-body.json.token exists: true
+response-body.token exists: true
 
 ---
 
@@ -84,12 +84,12 @@ is-http: true
 
 GET /profile HTTP/1.1
 host: api.example.com
-authorization: Bearer $(dependency.response-body.json.token)
+authorization: Bearer $(dependency.response-body.token)
 
 ====
 
 status-code equals: 200
-response-body.json.username exists: true`
+response-body.username exists: true`
     }
   }
 
@@ -212,7 +212,7 @@ content-type: application/json
                     <div className="code-block">
                       <pre>
                         <code className="text-sm">{`status-code equals: 201
-response-body.json.id exists: true
+response-body.id exists: true
 headers.content-type contains: json
 latency less-than: 1000`}</code>
                       </pre>
