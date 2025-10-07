@@ -114,6 +114,16 @@ fn parse_header_with_lines(header_text: &str, file_path: &str, start_line: usize
             let key = line[..colon_pos].trim().to_lowercase();
             let value = line[colon_pos + 1..].trim();
             
+            // Check if this is a set-environment property
+            if key.starts_with("set-environment.") {
+                let var_name = key.strip_prefix("set-environment.").unwrap().to_string();
+                if var_name.is_empty() {
+                    return Err(GreqError::Parse(format!("{}:{}: Empty environment variable name in 'set-environment.'", file_path, line_num)));
+                }
+                header.set_environment.insert(var_name, value.to_string());
+                continue;
+            }
+            
             match key.as_str() {
                 "project" => header.project = Some(value.to_string()),
                 "is-http" => header.is_http = parse_bool(value)
@@ -314,6 +324,16 @@ fn parse_header(header_text: &str) -> Result<Header> {
         if let Some(colon_pos) = line.find(':') {
             let key = line[..colon_pos].trim().to_lowercase();
             let value = line[colon_pos + 1..].trim();
+            
+            // Check if this is a set-environment property
+            if key.starts_with("set-environment.") {
+                let var_name = key.strip_prefix("set-environment.").unwrap().to_string();
+                if var_name.is_empty() {
+                    return Err(GreqError::Parse("Empty environment variable name in 'set-environment.'".to_string()));
+                }
+                header.set_environment.insert(var_name, value.to_string());
+                continue;
+            }
             
             match key.as_str() {
                 "project" => header.project = Some(value.to_string()),
@@ -587,6 +607,10 @@ pub fn merge_greq_files(base: &GreqFile, extending: &GreqFile) -> Result<GreqFil
     }
     if extending.header.execute_after.is_some() {
         merged.header.execute_after = extending.header.execute_after.clone();
+    }
+    // Merge set_environment - extending file adds to or overrides base environment variables
+    for (key, value) in &extending.header.set_environment {
+        merged.header.set_environment.insert(key.clone(), value.clone());
     }
     // Note: extends field is not inherited - each file manages its own extends
     
@@ -965,5 +989,114 @@ response-body.database_url equals: postgresql://user:pass@localhost:5432/dbname?
         
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Invalid boolean value 'invalid' for show-warnings"));
+    }
+
+    #[test]
+    fn test_parse_set_environment_single_variable() {
+        let content = "project: Test\nset-environment.MY_VAR: test_value\n";
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.set_environment.len(), 1);
+        assert_eq!(header.set_environment.get("my_var"), Some(&"test_value".to_string()));
+    }
+
+    #[test]
+    fn test_parse_set_environment_multiple_variables() {
+        let content = r#"project: Test
+set-environment.AUTH_TOKEN: bearer-xyz123
+set-environment.API_KEY: key-456
+set-environment.USER_ID: 789
+"#;
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.set_environment.len(), 3);
+        assert_eq!(header.set_environment.get("auth_token"), Some(&"bearer-xyz123".to_string()));
+        assert_eq!(header.set_environment.get("api_key"), Some(&"key-456".to_string()));
+        assert_eq!(header.set_environment.get("user_id"), Some(&"789".to_string()));
+    }
+
+    #[test]
+    fn test_parse_set_environment_with_placeholder() {
+        let content = "set-environment.TOKEN: $(dependency.response-body.auth_token)\n";
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_ok());
+        let header = result.unwrap();
+        assert_eq!(header.set_environment.len(), 1);
+        assert_eq!(header.set_environment.get("token"), Some(&"$(dependency.response-body.auth_token)".to_string()));
+    }
+
+    #[test]
+    fn test_parse_set_environment_empty_variable_name() {
+        let content = "set-environment.: value\n";
+        let result = parse_header_with_lines(content, "test.greq", 1);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Empty environment variable name"));
+    }
+
+    #[test]
+    fn test_merge_set_environment_variables() {
+        use crate::models::{Content, RequestLine, Footer};
+        
+        let base = GreqFile {
+            header: Header {
+                project: Some("Base".to_string()),
+                set_environment: vec![
+                    ("BASE_VAR".to_string(), "base_value".to_string()),
+                    ("SHARED_VAR".to_string(), "base_shared".to_string()),
+                ].into_iter().collect(),
+                ..Header::default()
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "GET".to_string(),
+                    uri: "/".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: HashMap::new(),
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "base.greq".to_string(),
+        };
+        
+        let extending = GreqFile {
+            header: Header {
+                project: Some("Extending".to_string()),
+                set_environment: vec![
+                    ("EXTENDING_VAR".to_string(), "extending_value".to_string()),
+                    ("SHARED_VAR".to_string(), "extending_shared".to_string()),
+                ].into_iter().collect(),
+                ..Header::default()
+            },
+            content: Content {
+                request_line: RequestLine {
+                    method: "POST".to_string(),
+                    uri: "/test".to_string(),
+                    version: "HTTP/1.1".to_string(),
+                },
+                headers: HashMap::new(),
+                body: None,
+            },
+            footer: Footer::default(),
+            file_path: "extending.greq".to_string(),
+        };
+        
+        let merged = merge_greq_files(&base, &extending).unwrap();
+        
+        // Check that extending file's project overrides
+        assert_eq!(merged.header.project, Some("Extending".to_string()));
+        
+        // Check that set_environment variables are merged
+        assert_eq!(merged.header.set_environment.len(), 3);
+        assert_eq!(merged.header.set_environment.get("BASE_VAR"), Some(&"base_value".to_string()));
+        assert_eq!(merged.header.set_environment.get("EXTENDING_VAR"), Some(&"extending_value".to_string()));
+        // Extending file should override shared variable
+        assert_eq!(merged.header.set_environment.get("SHARED_VAR"), Some(&"extending_shared".to_string()));
     }
 }

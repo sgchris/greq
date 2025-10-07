@@ -1,0 +1,21 @@
+project: Login and Set Auth Token
+is-http: true
+set-environment.GREQ_AUTH_TOKEN: $(dependency.response-body.auth_token)
+set-environment.GREQ_USER_ID: $(dependency.response-body.user.id)
+
+====
+
+POST /auth/login HTTP/1.1
+host: httpbin.org
+content-type: application/json
+
+{
+  "username": "testuser",
+  "password": "testpass123"
+}
+
+====
+
+status-code equals: 200
+response-body.auth_token exists: true
+response-body.user.id exists: true

@@ -1,0 +1,16 @@
+project: Simple Environment Variable Setting
+is-http: true
+set-environment.API_KEY: my-secret-api-key-123
+set-environment.API_VERSION: v1
+set-environment.TENANT_ID: tenant-456
+
+====
+
+GET /api/$(environment.API_VERSION)/users HTTP/1.1
+host: httpbin.org
+x-api-key: $(environment.API_KEY)
+x-tenant-id: $(environment.TENANT_ID)
+
+====
+
+status-code equals: 200

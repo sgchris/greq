@@ -588,14 +588,12 @@ mod tests {
                 project: Some("Test".to_string()),
                 is_http: true,
                 delimiter: "====".to_string(),
-                extends: None,
-                number_of_retries: 0,
                 depends_on: None,
-                timeout: None,
                 allow_dependency_failure: false,
                 show_warnings: true,
                 execute_before: None,
                 execute_after: None,
+                ..Header::default()
             },
             content: Content {
                 request_line: RequestLine {
@@ -635,14 +633,12 @@ mod tests {
                 project: Some("Test".to_string()),
                 is_http: true,
                 delimiter: "====".to_string(),
-                extends: None,
-                number_of_retries: 0,
                 depends_on: None,
-                timeout: None,
                 allow_dependency_failure: false,
                 show_warnings: true,
                 execute_before: None,
                 execute_after: None,
+                ..Header::default()
             },
             content: Content {
                 request_line: RequestLine {
@@ -690,6 +686,7 @@ mod tests {
                 show_warnings: true,
                 execute_before: None,
                 execute_after: None,
+                set_environment: HashMap::new(),
             },
             content: Content {
                 request_line: RequestLine {
@@ -742,6 +739,7 @@ mod tests {
                 show_warnings: false, // Warnings disabled
                 execute_before: None,
                 execute_after: None,
+                set_environment: HashMap::new(),
             },
             content: Content {
                 request_line: RequestLine {
@@ -800,6 +798,7 @@ mod tests {
                 number_of_retries: 0,
                 execute_before: None,
                 execute_after: None,
+                set_environment: HashMap::new(),
             },
             content: Content {
                 request_line: RequestLine {
@@ -843,6 +842,7 @@ mod tests {
                 number_of_retries: 0,
                 execute_before: None,
                 execute_after: None,
+                set_environment: HashMap::new(),
             },
             content: Content {
                 request_line: RequestLine {
@@ -882,6 +882,7 @@ mod tests {
                 number_of_retries: 0,
                 execute_before: None,
                 execute_after: None,
+                set_environment: HashMap::new(),
             },
             content: Content {
                 request_line: RequestLine {
@@ -924,14 +925,12 @@ mod tests {
                 project: Some("Test".to_string()),
                 is_http: true,
                 delimiter: "====".to_string(),
-                extends: None,
                 depends_on: None, // No dependency defined
                 allow_dependency_failure: false,
                 show_warnings: true,
-                timeout: None,
-                number_of_retries: 0,
                 execute_before: Some("echo $(dependency.status-code)".to_string()),
                 execute_after: None,
+                ..Header::default()
             },
             content: Content {
                 request_line: RequestLine {
@@ -963,14 +962,12 @@ mod tests {
                 project: Some("Test".to_string()),
                 is_http: true,
                 delimiter: "====".to_string(),
-                extends: None,
                 depends_on: None, // No dependency defined
                 allow_dependency_failure: false,
                 show_warnings: true,
-                timeout: None,
-                number_of_retries: 0,
                 execute_before: None,
                 execute_after: Some("./cleanup.sh $(dep.response-body.id)".to_string()),
+                ..Header::default()
             },
             content: Content {
                 request_line: RequestLine {
@@ -1010,6 +1007,7 @@ mod tests {
                 number_of_retries: 0,
                 execute_before: None,
                 execute_after: None,
+                set_environment: HashMap::new(),
             },
             content: Content {
                 request_line: RequestLine {

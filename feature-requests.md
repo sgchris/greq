@@ -43,3 +43,10 @@
 
 8. Add support for OpenAPI 3.0
     - Allow to import OpenAPI 3.0 spec and generate Greq file from it
+
+9. add `set-environment.<variable name>: <variable value>`. 
+(Used for example to set the authentication header)
+
+9. Allow dependency chaining - A dependency placeholder is replaced with the values generated in one of (!) the previously executed greq files.
+(for example: In the chain: greq1 -> greq2 -> greq3, if greq1's response included the header "my-header", greq3 is allowed to use the placeholder $(dependency.headers.my-header))
+

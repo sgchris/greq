@@ -1,0 +1,12 @@
+depends-on: 21-test-set-env.greq
+project: Use Previously Set Environment Variables
+is-http: true
+
+====
+
+GET /get?value=$(environment.TEST_VALUE)&number=$(environment.TEST_NUMBER) HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

@@ -54,6 +54,7 @@ condition: value
 | `number-of-retries` | Retry attempts on failure | `number-of-retries: 3` | `0` |
 | `execute-before` | Shell command to run before HTTP request | `execute-before: echo "Starting test"` | None |
 | `execute-after` | Shell command to run after response received | `execute-after: echo "Test completed"` | None |
+| `set-environment.<name>` | Set environment variable for subsequent requests | `set-environment.AUTH_TOKEN: $(dependency.response-body.token)` | None |
 
 ### Property Details
 
@@ -107,6 +108,56 @@ execute-after: echo "Response body: $(dependency.response-body)"
 ```
 
 **Important:** If the execute-after command fails, the test is marked as failed even if all conditions passed.
+
+#### `set-environment.<variable_name>`
+Sets environment variables that can be used in subsequent requests within the same execution session. The variable name is specified after the dot, and the value supports full placeholder replacement including dependency responses.
+
+This is particularly useful for:
+- Capturing authentication tokens from login responses
+- Storing user IDs, session tokens, or API keys
+- Passing data between test files
+- Setting dynamic configuration values
+
+**Key Features:**
+- Variables are set **after** placeholder replacement, so dependency values are fully resolved
+- Multiple variables can be set in a single file
+- Variables persist for the entire execution session and are available to all subsequent requests
+- Works seamlessly with `depends-on` to capture response data
+- Can be used in combination with `execute-before` and `execute-after` commands
+
+**Example - Capturing Auth Token:**
+```greq
+depends-on: login.greq
+set-environment.GREQ_AUTH_TOKEN: $(dependency.response-body.auth_token)
+set-environment.GREQ_USER_ID: $(dependency.response-body.user.id)
+
+====
+
+GET /api/protected HTTP/1.1
+host: api.example.com
+authorization: Bearer $(environment.GREQ_AUTH_TOKEN)
+x-user-id: $(environment.GREQ_USER_ID)
+```
+
+**Example - Static Configuration:**
+```greq
+set-environment.API_VERSION: v2
+set-environment.TENANT_ID: tenant-123
+set-environment.API_KEY: my-secret-key
+
+====
+
+GET /api/$(environment.API_VERSION)/users HTTP/1.1
+host: api.example.com
+x-api-key: $(environment.API_KEY)
+x-tenant-id: $(environment.TENANT_ID)
+```
+
+**Important Notes:**
+- Variable names are case-insensitive when parsed (converted to lowercase)
+- Environment variables set in one greq file are available to all subsequent files in the execution chain
+- Use the `$(environment.<variable_name>)` syntax to access the variables in requests
+- Variables are set in the order they appear in the file
 
 #### Shell Command Execution Details
 

@@ -33,6 +33,7 @@ response-body contains: id
 - Parse `.greq` request files with structured metadata, body, and evaluation conditions
 - Run requests and validate responses
 - Supports inheritance, templating, placeholders, and chain of dependencies
+- **Set environment variables from response data** with `set-environment.<name>` properties
 - **Execute shell commands before and after HTTP requests** with `execute-before` and `execute-after`
 - Environment variable placeholders with `$(environment.VAR_NAME)` syntax
 - Allow dependency failure handling with `allow-dependency-failure` property
@@ -103,9 +104,51 @@ The `greq-examples/` directory contains various example files demonstrating diff
 - **Basic tests**: Simple GET/POST requests
 - **Inheritance**: Using base configurations
 - **Dependencies**: Chaining tests with data flow
+- **Environment variables**: Setting and using environment variables from response data
 - **Dependency failure handling**: Using `allow-dependency-failure` for robust test workflows
-- **Environment variables**: Using environment variable placeholders
+- **Shell commands**: Using `execute-before` and `execute-after` for test automation
 - **Advanced conditions**: Complex validation scenarios
+
+### Setting Environment Variables from Response Data
+
+Capture values from API responses and use them in subsequent requests:
+
+```greq
+-- login.greq
+project: Login and Capture Token
+is-http: true
+set-environment.AUTH_TOKEN: $(dependency.response-body.auth_token)
+set-environment.USER_ID: $(dependency.response-body.user.id)
+
+====
+
+POST /auth/login HTTP/1.1
+host: api.example.com
+content-type: application/json
+
+{"username": "testuser", "password": "pass123"}
+
+====
+
+status-code equals: 200
+response-body.auth_token exists: true
+```
+
+```greq
+-- protected-resource.greq
+depends-on: login.greq
+project: Access Protected Resource
+
+====
+
+GET /api/users/$(environment.USER_ID) HTTP/1.1
+host: api.example.com
+authorization: Bearer $(environment.AUTH_TOKEN)
+
+====
+
+status-code equals: 200
+```
 
 ## Contributing
 

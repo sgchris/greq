@@ -1,0 +1,13 @@
+project: Set Environment Variables
+is-http: true
+set-environment.TEST_VALUE: hello-world
+set-environment.TEST_NUMBER: 42
+
+====
+
+GET /get HTTP/1.1
+host: httpbin.org
+
+====
+
+status-code equals: 200

@@ -24,6 +24,7 @@ pub struct Header {
     pub show_warnings: bool,
     pub execute_before: Option<String>,
     pub execute_after: Option<String>,
+    pub set_environment: HashMap<String, String>,
 }
 
 /// Content section representing the HTTP request
@@ -118,6 +119,7 @@ impl Default for Header {
             show_warnings: true,
             execute_before: None,
             execute_after: None,
+            set_environment: HashMap::new(),
         }
     }
 }

@@ -85,6 +85,15 @@ pub async fn execute_greq_file<P: AsRef<Path>>(
             replace_placeholders_in_greq_file_with_optional_response(&mut greq_file, None)?;
         }
 
+        // Set environment variables from set-environment properties (after placeholder replacement)
+        for (var_name, var_value) in &greq_file.header.set_environment {
+            log::debug!("Setting environment variable: {} = {}", var_name, var_value);
+            std::env::set_var(var_name, var_value);
+            if verbose {
+                println!("  ✓ Set environment variable: {} = {}", var_name, var_value);
+            }
+        }
+
         // Execute execute-before command if specified
         if let Some(ref command) = greq_file.header.execute_before {
             log::info!("Executing execute-before command for: {:?}", dep_path);

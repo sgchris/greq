@@ -1,0 +1,14 @@
+depends-on: 18-login-set-env.greq
+project: Use Auth Token from Environment
+is-http: true
+
+====
+
+GET /api/protected HTTP/1.1
+host: httpbin.org
+authorization: Bearer $(environment.GREQ_AUTH_TOKEN)
+x-user-id: $(environment.GREQ_USER_ID)
+
+====
+
+status-code equals: 200
