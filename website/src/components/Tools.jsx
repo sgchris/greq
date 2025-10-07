@@ -192,6 +192,7 @@ is-http: true
 timeout: 5000
 extends: base.greq
 depends-on: auth.greq
+set-environment.AUTH_TOKEN: $(dependency.response-body.token)
 execute-before: echo "Starting test"
 execute-after: ./cleanup.sh`}</code>
                       </pre>
@@ -249,6 +250,7 @@ latency less-than: 1000`}</code>
                         { prop: 'timeout', desc: 'Request timeout in milliseconds', example: 'timeout: 5000' },
                         { prop: 'extends', desc: 'Inherit from base file', example: 'extends: base.greq' },
                         { prop: 'depends-on', desc: 'Execute dependency first', example: 'depends-on: auth.greq' },
+                        { prop: 'set-environment.<name>', desc: 'Set environment variable from response data', example: 'set-environment.TOKEN: $(dependency.response-body.token)' },
                         { prop: 'execute-before', desc: 'Shell command to run before HTTP request', example: 'execute-before: echo "Starting"' },
                         { prop: 'execute-after', desc: 'Shell command to run after response', example: 'execute-after: ./cleanup.sh' },
                         { prop: 'number-of-retries', desc: 'Retry attempts on failure', example: 'number-of-retries: 3' }

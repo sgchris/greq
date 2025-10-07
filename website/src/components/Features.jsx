@@ -5,7 +5,8 @@ import {
   CommandLineIcon,
   ClockIcon,
   ArrowPathIcon,
-  RocketLaunchIcon
+  RocketLaunchIcon,
+  KeyIcon
 } from '@heroicons/react/24/outline'
 
 const Features = () => {
@@ -36,6 +37,23 @@ project: Protected Resource
 
 GET /api/protected HTTP/1.1
 authorization: Bearer $(dependency.response-body.token)
+
+====
+
+status-code equals: 200`
+    },
+    {
+      name: 'Set Environment Variables',
+      description: 'Capture response data and set environment variables for use in subsequent requests.',
+      icon: KeyIcon,
+      example: `depends-on: login.greq
+set-environment.AUTH_TOKEN: $(dependency.response-body.auth_token)
+set-environment.USER_ID: $(dependency.response-body.user.id)
+
+====
+
+GET /api/users/$(environment.USER_ID) HTTP/1.1
+authorization: Bearer $(environment.AUTH_TOKEN)
 
 ====
 
